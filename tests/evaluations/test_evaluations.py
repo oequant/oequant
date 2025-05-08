@@ -19,7 +19,10 @@ def sample_backtest_result_no_trades():
     }
     returns_df = pd.DataFrame(returns_data, index=dates)
     trades_df = pd.DataFrame()
-    return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=10000.0, final_equity=10000.0)
+    # Create dummy ohlcv_data
+    ohlcv_columns = ['open', 'high', 'low', 'close', 'volume']
+    ohlcv_df = pd.DataFrame(100, index=dates, columns=ohlcv_columns)
+    return BacktestResult(trades=trades_df, returns=returns_df, ohlcv_data=ohlcv_df, initial_capital=10000.0, final_equity=10000.0)
 
 @pytest.fixture
 def sample_backtest_result_one_trade():
@@ -62,7 +65,10 @@ def sample_backtest_result_one_trade():
     }]
     trades_df = pd.DataFrame(trades_data)
     final_equity = returns_df['equity'].iloc[-1]
-    return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=initial_capital, final_equity=final_equity)
+    # Create dummy ohlcv_data
+    ohlcv_columns = ['open', 'high', 'low', 'close', 'volume']
+    ohlcv_df = pd.DataFrame(100, index=dates, columns=ohlcv_columns)
+    return BacktestResult(trades=trades_df, returns=returns_df, ohlcv_data=ohlcv_df, initial_capital=initial_capital, final_equity=final_equity)
 
 
 class TestEvaluations:
@@ -153,7 +159,10 @@ class TestEvaluations:
         returns_df = pd.DataFrame(returns_data, index=dates)
         trades_df = pd.DataFrame([{'pnl_net_currency': 200, 'pnl_net_frac': 0.02}]) # Dummy trade
         
-        result = BacktestResult(trades=trades_df, returns=returns_df, initial_capital=initial_capital, final_equity=equity_values[-1])
+        # Create dummy ohlcv_data
+        ohlcv_columns = ['open', 'high', 'low', 'close', 'volume']
+        ohlcv_df = pd.DataFrame(100, index=dates, columns=ohlcv_columns)
+        result = BacktestResult(trades=trades_df, returns=returns_df, ohlcv_data=ohlcv_df, initial_capital=initial_capital, final_equity=equity_values[-1])
         stats = calculate_statistics(result, PnL_type='net')
         
         # Rolling Max: [10000, 10100, 10100, 10100, 10200]
@@ -170,7 +179,10 @@ class TestEvaluations:
         empty_returns = pd.DataFrame(columns=['equity', 'position_unit', 'position_usd', 'return_gross_frac', 'return_net_frac', 'return_gross_currency', 'return_net_currency'])
         empty_returns.index = pd.to_datetime(empty_returns.index)
         trades_df = pd.DataFrame()
-        result = BacktestResult(trades=trades_df, returns=empty_returns, initial_capital=10000, final_equity=10000)
+        # Create dummy ohlcv_data
+        ohlcv_columns = ['open', 'high', 'low', 'close', 'volume']
+        ohlcv_df = pd.DataFrame(index=empty_returns.index, columns=ohlcv_columns).fillna(100)
+        result = BacktestResult(trades=trades_df, returns=empty_returns, ohlcv_data=ohlcv_df, initial_capital=10000, final_equity=10000)
         stats = calculate_statistics(result)
         assert stats['cagr_pct'] == 0.0
         assert np.isnan(stats['sharpe_ratio'])

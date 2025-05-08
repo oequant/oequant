@@ -197,7 +197,7 @@ def plot_results(
     
     # Plot Benchmark Equity (if available)
     if has_benchmark:
-        fig_equity.line(x=date_col_name, y='benchmark_equity', source=equity_source, color=BENCH_COLOR, line_dash='dashed', legend_label="Benchmark Equity")
+        fig_equity.line(x=date_col_name, y='benchmark_equity', source=equity_source, color=BENCH_COLOR, line_dash='dashed', legend_label="Benchmark Equity", visible=False)
         
     fig_equity.yaxis.formatter = NumeralTickFormatter(format="$ 0,0")
     fig_equity.xaxis.visible = False
@@ -224,7 +224,7 @@ def plot_results(
             title=indicator_name.replace('_', ' ').title(),
             y_range=DataRange1d(only_visible=True)
         )
-        fig_indicator.line(x='datetime', y=indicator_name, source=source, color=next(other_indicator_colors))
+        r = fig_indicator.line(x='datetime', y=indicator_name, source=source, color=next(other_indicator_colors))
         fig_indicator.yaxis.formatter = NumeralTickFormatter(format="0,0.0[00]")
         fig_indicator.xaxis.visible = False
         fig_indicator.add_tools(crosshair)
