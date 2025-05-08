@@ -199,6 +199,7 @@ def plot_results(
     fig_equity.yaxis.formatter = NumeralTickFormatter(format="$ 0,0")
     fig_equity.xaxis.visible = False
     fig_equity.legend.location = "top_left"
+    fig_equity.legend.click_policy = "hide"
     fig_equity.add_tools(crosshair)
     
     # Define tooltips, conditionally add benchmark
