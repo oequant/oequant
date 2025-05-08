@@ -24,21 +24,57 @@ class Backtester:
     ) -> BacktestResult:
         """
         Core backtesting logic.
+        Handles column names or pandas expressions for entry/exit signals.
         """
         if not isinstance(data.index, pd.DatetimeIndex):
             raise ValueError("Data index must be a DatetimeIndex.")
+        
+        # Work on a copy to avoid modifying original DataFrame
+        data_copy = data.copy()
+        
+        # --- Evaluate Entry/Exit Expressions --- 
+        internal_entry_col = entry_column
+        internal_exit_col = exit_column
+        temp_cols_to_drop = []
 
-        # Validate required columns
-        required_cols = {entry_column, exit_column, entry_price_col, exit_price_col, signal_price_col}
+        if entry_column not in data_copy.columns:
+            try:
+                entry_signal = data_copy.eval(entry_column)
+                if not pd.api.types.is_bool_dtype(entry_signal):
+                    raise TypeError(f"Entry expression '{entry_column}' did not evaluate to boolean Series.")
+                internal_entry_col = '__entry_signal__'
+                data_copy[internal_entry_col] = entry_signal
+                temp_cols_to_drop.append(internal_entry_col)
+                print(f"Evaluated entry expression: '{entry_column}' -> {internal_entry_col}")
+            except Exception as e:
+                raise ValueError(f"Failed to evaluate entry expression '{entry_column}'. Original error: {e}") from e
+                
+        if exit_column not in data_copy.columns:
+            try:
+                exit_signal = data_copy.eval(exit_column)
+                if not pd.api.types.is_bool_dtype(exit_signal):
+                    raise TypeError(f"Exit expression '{exit_column}' did not evaluate to boolean Series.")
+                internal_exit_col = '__exit_signal__'
+                data_copy[internal_exit_col] = exit_signal
+                temp_cols_to_drop.append(internal_exit_col)
+                print(f"Evaluated exit expression: '{exit_column}' -> {internal_exit_col}")
+            except Exception as e:
+                raise ValueError(f"Failed to evaluate exit expression '{exit_column}'. Original error: {e}") from e
+        # --- End Expression Evaluation ---
+
+        # Validate required columns (using potentially generated internal names)
+        required_cols = {internal_entry_col, internal_exit_col, entry_price_col, exit_price_col, signal_price_col}
         if isinstance(size_col_or_val, str):
             required_cols.add(size_col_or_val)
-        missing_cols = required_cols - set(data.columns)
+        missing_cols = required_cols - set(data_copy.columns)
         if missing_cols:
+             # Clean up temporary columns before raising error
+            data_copy.drop(columns=temp_cols_to_drop, inplace=True, errors='ignore')
             raise ValueError(f"Missing required columns in data: {missing_cols}")
 
         # Initialize results storage
         trades_list = []
-        num_bars = len(data)
+        num_bars = len(data_copy)
         # .returns dataframe columns
         # ['equity', 'position_unit', 'position_usd', 'return_gross_frac', 'return_net_frac', 'return_gross_currency', 'return_net_currency']
         returns_data = np.full((num_bars, 7), np.nan)
@@ -52,17 +88,28 @@ class Backtester:
         trade_number = 0
         equity_at_trade_entry = capital
 
+        # Use internal column names within the loop
+        entry_signal_series = data_copy[internal_entry_col]
+        exit_signal_series = data_copy[internal_exit_col]
+        entry_price_series = data_copy[entry_price_col]
+        exit_price_series = data_copy[exit_price_col]
+        signal_price_series = data_copy[signal_price_col]
+        size_series = data_copy[size_col_or_val] if isinstance(size_col_or_val, str) else None
+
+        # --- Main Backtest Loop --- 
+        # (Using optimized access where possible, e.g. pre-selected series)
         for i in range(num_bars):
-            bar_data = data.iloc[i]
-            bar_time = data.index[i]
+            # bar_data = data_copy.iloc[i] # Less efficient than using series directly
+            bar_time = data_copy.index[i]
             equity_at_bar_start = current_equity
             
             bar_pnl_gross_curr = 0.0
             bar_fees_curr = 0.0
 
             # Process exits first, then entries for the same bar
-            if in_trade and bar_data[exit_column]:
-                exit_price_actual = bar_data[exit_price_col]
+            exit_signal_active = exit_signal_series.iloc[i]
+            if in_trade and exit_signal_active:
+                exit_price_actual = exit_price_series.iloc[i]
                 proceeds_gross = current_position_units * exit_price_actual
                 
                 fee_exit_frac_val = proceeds_gross * fee_frac
@@ -71,12 +118,13 @@ class Backtester:
                 bar_fees_curr += total_exit_fees
 
                 # PnL from previous close to this exit price
-                prev_signal_price = data[signal_price_col].iloc[i-1] if i > 0 else trade_entry_price_actual
+                prev_signal_price = signal_price_series.iloc[i-1] if i > 0 else trade_entry_price_actual
                 bar_pnl_gross_curr += current_position_units * (exit_price_actual - prev_signal_price)
 
                 # Trade PnL calculations
                 pnl_gross_trade_curr = proceeds_gross - trade_cost_basis_total
-                total_trade_fees = trades_list[-1]['entry_fee_total_currency'] + total_exit_fees # entry_fee already in trades_list for current trade
+                # Safely access entry fee assuming trades_list[-1] exists because in_trade is True
+                total_trade_fees = trades_list[-1]['entry_fee_total_currency'] + total_exit_fees 
                 pnl_net_trade_curr = pnl_gross_trade_curr - total_trade_fees
 
                 trades_list[-1].update({
@@ -97,12 +145,14 @@ class Backtester:
                 current_position_units = 0.0
                 # current_equity is updated by bar_pnl_net_curr at the end of bar processing
 
-            if not in_trade and bar_data[entry_column]:
+            # Process entry signal for this bar
+            entry_signal_active = entry_signal_series.iloc[i]
+            if not in_trade and entry_signal_active:
                 trade_number += 1
-                trade_entry_price_actual = bar_data[entry_price_col]
+                trade_entry_price_actual = entry_price_series.iloc[i]
                 
-                if isinstance(size_col_or_val, str):
-                    quantity_requested = bar_data[size_col_or_val]
+                if size_series is not None:
+                    quantity_requested = size_series.iloc[i]
                 else:
                     quantity_requested = float(size_col_or_val)
                 
@@ -112,7 +162,10 @@ class Backtester:
                     quantity = quantity_requested
                 
                 if quantity <= 0:
-                    continue # Skip if trying to enter with zero or negative size
+                    # Skip trade if size is zero or negative, reset trade number if needed?
+                    # Maybe log a warning? For now, just continue.
+                    trade_number -= 1 # Decrement because trade didn't actually happen
+                    continue 
 
                 trade_cost_basis_total = quantity * trade_entry_price_actual
                 fee_entry_frac_val = trade_cost_basis_total * fee_frac
@@ -121,7 +174,7 @@ class Backtester:
                 bar_fees_curr += total_entry_fees
 
                 # PnL from entry to this bar's signal price
-                current_signal_price = bar_data[signal_price_col]
+                current_signal_price = signal_price_series.iloc[i]
                 bar_pnl_gross_curr += quantity * (current_signal_price - trade_entry_price_actual)
                 
                 current_position_units = quantity
@@ -146,8 +199,8 @@ class Backtester:
                 })
 
                 # Check for immediate exit on the same bar
-                if trade_start_bar_index == i and bar_data[exit_column]: # A trade was just opened and exit signal is also true
-                    exit_price_actual_immediate = bar_data[exit_price_col]
+                if trade_start_bar_index == i and exit_signal_series.iloc[i]: # A trade was just opened and exit signal is also true
+                    exit_price_actual_immediate = exit_price_series.iloc[i]
                     proceeds_gross_immediate = current_position_units * exit_price_actual_immediate
 
                     fee_exit_frac_val_immediate = proceeds_gross_immediate * fee_frac
@@ -157,7 +210,7 @@ class Backtester:
 
                     # Adjust bar_pnl_gross_curr: it already has (signal - entry_price) component.
                     # Add (exit_price - signal_price) component.
-                    bar_pnl_gross_curr += current_position_units * (exit_price_actual_immediate - bar_data[signal_price_col])
+                    bar_pnl_gross_curr += current_position_units * (exit_price_actual_immediate - signal_price_series.iloc[i])
 
                     # Update the trade record for immediate exit
                     pnl_gross_trade_curr_immediate = proceeds_gross_immediate - trade_cost_basis_total
@@ -182,15 +235,15 @@ class Backtester:
                     current_position_units = 0.0
             
             elif in_trade: # Holding a position (that wasn't immediately exited after entry)
-                current_signal_price = bar_data[signal_price_col]
-                prev_signal_price = data[signal_price_col].iloc[i-1] if i > 0 else trade_entry_price_actual
+                current_signal_price = signal_price_series.iloc[i]
+                prev_signal_price = signal_price_series.iloc[i-1] if i > 0 else trade_entry_price_actual
                 bar_pnl_gross_curr += current_position_units * (current_signal_price - prev_signal_price)
 
             bar_pnl_net_curr = bar_pnl_gross_curr - bar_fees_curr
             current_equity = equity_at_bar_start + bar_pnl_net_curr # This is the key equity update line
 
             position_units_at_bar_end = current_position_units # Position held *into* next bar
-            position_usd_at_bar_end = position_units_at_bar_end * bar_data[signal_price_col]
+            position_usd_at_bar_end = position_units_at_bar_end * signal_price_series.iloc[i]
 
             returns_data[i, 0] = current_equity
             returns_data[i, 1] = position_units_at_bar_end
@@ -199,28 +252,26 @@ class Backtester:
             returns_data[i, 4] = bar_pnl_net_curr / equity_at_bar_start if equity_at_bar_start != 0 else 0
             returns_data[i, 5] = bar_pnl_gross_curr
             returns_data[i, 6] = bar_pnl_net_curr
+        # --- End Backtest Loop --- 
         
         # Finalize trades that are still open at the end of data
         if in_trade:
-            # Mark to market close for the last bar
-            last_bar_data = data.iloc[-1]
-            last_price = last_bar_data[signal_price_col] # Use signal_price_col for MTM close
+            last_bar_data = data_copy.iloc[-1] # Need original bar data here for MTM price
+            last_price = last_bar_data[signal_price_col] 
             proceeds_gross = current_position_units * last_price
             
-            # No exit fees for MTM close unless specified, assume 0 for now
-            total_exit_fees = 0.0 
-            # bar_fees_curr += total_exit_fees # Not part of last bar's fees, part of trade itself
+            total_exit_fees = 0.0 # Assume no exit fees for MTM close
 
             pnl_gross_trade_curr = proceeds_gross - trade_cost_basis_total
             total_trade_fees = trades_list[-1]['entry_fee_total_currency'] + total_exit_fees
             pnl_net_trade_curr = pnl_gross_trade_curr - total_trade_fees
 
             trades_list[-1].update({
-                'exit_time': data.index[-1], # Mark as exited at last bar time
-                'exit_price': last_price, # MTM exit price
+                'exit_time': data_copy.index[-1],
+                'exit_price': last_price,
                 'bars_held': num_bars - 1 - trade_start_bar_index,
-                'exit_fee_frac_value': 0.0, # No actual exit fee
-                'exit_fee_curr_value': 0.0, # No actual exit fee
+                'exit_fee_frac_value': 0.0,
+                'exit_fee_curr_value': 0.0,
                 'fee_total_currency': total_trade_fees, 
                 'fee_total_as_fraction_of_equity': total_trade_fees / equity_at_trade_entry if equity_at_trade_entry else 0,
                 'pnl_gross_currency': pnl_gross_trade_curr,
@@ -228,24 +279,27 @@ class Backtester:
                 'pnl_net_currency': pnl_net_trade_curr,
                 'pnl_net_frac': pnl_net_trade_curr / trade_cost_basis_total if trade_cost_basis_total else 0,
             })
-            # Equity is already MTM by the loop
 
         returns_df_cols = ['equity', 'position_unit', 'position_usd', 'return_gross_frac', 'return_net_frac', 'return_gross_currency', 'return_net_currency']
-        returns_df = pd.DataFrame(returns_data, index=data.index, columns=returns_df_cols)
+        returns_df = pd.DataFrame(returns_data, index=data_copy.index, columns=returns_df_cols)
         trades_df = pd.DataFrame(trades_list)
         
-        # Ensure correct dtypes for trades_df, especially for times and numeric
+        # Ensure correct dtypes for trades_df
         if not trades_df.empty:
             trades_df['entry_time'] = pd.to_datetime(trades_df['entry_time'])
             trades_df['exit_time'] = pd.to_datetime(trades_df['exit_time'])
-            for col in ['entry_price', 'quantity', 'entry_fee_frac_value', 'entry_fee_curr_value', 
-                        'entry_fee_total_currency', 'exit_price', 'bars_held', 'exit_fee_frac_value', 
-                        'exit_fee_curr_value', 'fee_total_currency', 'fee_total_as_fraction_of_equity',
-                        'pnl_gross_currency', 'pnl_gross_frac', 'pnl_net_currency', 'pnl_net_frac']:
+            numeric_cols = [
+                'entry_price', 'quantity', 'entry_fee_frac_value', 'entry_fee_curr_value', 
+                'entry_fee_total_currency', 'exit_price', 'bars_held', 'exit_fee_frac_value', 
+                'exit_fee_curr_value', 'fee_total_currency', 'fee_total_as_fraction_of_equity',
+                'pnl_gross_currency', 'pnl_gross_frac', 'pnl_net_currency', 'pnl_net_frac'
+            ]
+            for col in numeric_cols:
                 if col in trades_df.columns:
                      trades_df[col] = pd.to_numeric(trades_df[col], errors='coerce')
 
-        return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=capital, final_equity=current_equity, ohlcv_data=data)
+        # Return the result object, passing the ORIGINAL data (not data_copy with temp cols)
+        return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=capital, final_equity=current_equity, ohlcv_data=data) # Pass original data
 
 
 def backtest(
@@ -263,6 +317,7 @@ def backtest(
 ) -> BacktestResult:
     """
     User-friendly functional wrapper for the Backtester class.
+    Can accept column names or pandas expressions for entry/exit signals.
     """
     engine = Backtester()
     return engine.backtest(
