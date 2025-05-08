@@ -12,7 +12,8 @@ from bokeh.models import (
     DatetimeTickFormatter,
     LinearAxis,
     Range1d,
-    Span
+    Span,
+    DataRange1d
 )
 from bokeh.palettes import Category10
 from bokeh.colors import RGB
@@ -117,7 +118,8 @@ def plot_results(
     fig_price = figure(
         height=main_price_plot_height, width=plot_width, tools=tools,
         x_axis_type="datetime", x_axis_location="above",
-        title=f"{price_col.capitalize()} with Trades"
+        title=f"{price_col.capitalize()} with Trades",
+        y_range=DataRange1d(only_visible=True)
     )
     fig_price.yaxis.formatter = NumeralTickFormatter(format="0,0.0[00]")
     fig_price.xaxis.formatter = DatetimeTickFormatter(months="%b %Y", days="%d %b") # Show month/year initially
@@ -170,7 +172,8 @@ def plot_results(
         height=calculated_equity_height, width=plot_width, tools=tools,
         x_range=fig_price.x_range, # Link x-axes
         x_axis_type="datetime",
-        title="Equity Curve"
+        title="Equity Curve",
+        y_range=DataRange1d(only_visible=True)
     )
     # Prepare returns data for Bokeh source
     returns_for_plot = returns.reset_index() # Index (e.g., 'date') becomes a column
@@ -214,22 +217,22 @@ def plot_results(
     indicator_figs = []
     other_indicator_colors = _colorgen()
     for indicator_name in indicators_other:
-        if indicator_name in ohlcv.columns:
-            fig_indicator = figure(
-                height=per_indicator_plot_height, width=plot_width, tools=tools,
-                x_range=fig_price.x_range, # Link x-axes
-                x_axis_type="datetime",
-                title=indicator_name
-            )
-            r = fig_indicator.line('datetime', indicator_name, source=source, color=next(other_indicator_colors))
-            fig_indicator.yaxis.formatter = NumeralTickFormatter(format="0,0.0[00]")
-            fig_indicator.xaxis.visible = False
-            fig_indicator.add_tools(crosshair)
-            fig_indicator.add_tools(HoverTool(renderers=[r], tooltips=[
-                ("Date", "@datetime{%F}"), 
-                (indicator_name, f"@{indicator_name}{{0,0.0[00]}}")
-            ], formatters={'@datetime': 'datetime'}, mode='vline'))
-            indicator_figs.append(fig_indicator)
+        fig_indicator = figure(
+            height=per_indicator_plot_height, width=plot_width, tools=tools,
+            x_range=fig_price.x_range, # Link x-axes
+            x_axis_type="datetime",
+            title=indicator_name.replace('_', ' ').title(),
+            y_range=DataRange1d(only_visible=True)
+        )
+        fig_indicator.line(x='datetime', y=indicator_name, source=source, color=next(other_indicator_colors))
+        fig_indicator.yaxis.formatter = NumeralTickFormatter(format="0,0.0[00]")
+        fig_indicator.xaxis.visible = False
+        fig_indicator.add_tools(crosshair)
+        fig_indicator.add_tools(HoverTool(renderers=[r], tooltips=[
+            ("Date", "@datetime{%F}"), 
+            (indicator_name, f"@{indicator_name}{{0,0.0[00]}}")
+        ], formatters={'@datetime': 'datetime'}, mode='vline'))
+        indicator_figs.append(fig_indicator)
 
     # ---- Combine Plots ----
     # Show final x-axis on the last plot
