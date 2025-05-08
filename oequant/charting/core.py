@@ -78,6 +78,12 @@ def plot_results(
         if selected_theme_name:
             curdoc().theme = selected_theme_name
 
+        # Define background color based on theme for explicit setting
+        dark_bg_color = "#2F2F2F"
+        border_color = dark_bg_color if plot_theme == "dark" else None # Use dark for border too in dark mode
+        bg_color = dark_bg_color if plot_theme == "dark" else None
+        text_color = "white" if plot_theme == "dark" else "black" # Define text color
+
         ohlcv = result.ohlcv_data.copy()
         trades = result.trades.copy()
         returns = result.returns.copy()
@@ -135,10 +141,31 @@ def plot_results(
             height=main_price_plot_height, width=plot_width, tools=tools,
             x_axis_type="datetime", x_axis_location="above",
             title=f"{price_col.capitalize()} with Trades",
-            y_range=DataRange1d(only_visible=True)
+            y_range=DataRange1d(only_visible=True),
+            background_fill_color=bg_color, # Explicit background
+            border_fill_color=border_color    # Explicit border
         )
         fig_price.yaxis.formatter = NumeralTickFormatter(format="0,0.0[00]")
         fig_price.xaxis.formatter = DatetimeTickFormatter(months="%b %Y", days="%d %b") # Show month/year initially
+        # Apply text colors for dark theme
+        if plot_theme == "dark":
+            fig_price.title.text_color = text_color
+            if fig_price.xaxis:
+                fig_price.xaxis.axis_label_text_color = text_color
+                fig_price.xaxis.major_label_text_color = text_color
+                fig_price.xaxis.major_tick_line_color = text_color
+                fig_price.xaxis.minor_tick_line_color = text_color
+                fig_price.xaxis.axis_line_color = text_color # Axis line itself
+            if fig_price.yaxis:
+                fig_price.yaxis.axis_label_text_color = text_color
+                fig_price.yaxis.major_label_text_color = text_color
+                fig_price.yaxis.major_tick_line_color = text_color
+                fig_price.yaxis.minor_tick_line_color = text_color
+                fig_price.yaxis.axis_line_color = text_color # Axis line itself
+            if fig_price.legend:
+                fig_price.legend.label_text_color = text_color
+                # Potentially set legend title color if it exists
+                # fig_price.legend.title_text_color = text_color 
 
         is_ohlc_available = show_ohlc and all(c in ohlcv.columns for c in ['open', 'high', 'low', 'close'])
         if is_ohlc_available:
@@ -189,11 +216,27 @@ def plot_results(
             x_range=fig_price.x_range, # Link x-axes
             x_axis_type="datetime",
             title="Equity Curve",
-            y_range=DataRange1d(only_visible=True)
+            y_range=DataRange1d(only_visible=True),
+            background_fill_color=bg_color, # Explicit background
+            border_fill_color=border_color    # Explicit border
         )
         returns_for_plot = returns.reset_index() # Index (e.g., 'date') becomes a column
         date_col_name = returns_for_plot.columns[0] # The first column is the former index
         
+        # Apply text colors for dark theme
+        if plot_theme == "dark":
+            fig_equity.title.text_color = text_color
+            # x-axis is initially hidden, but set y-axis
+            if fig_equity.yaxis:
+                fig_equity.yaxis.axis_label_text_color = text_color
+                fig_equity.yaxis.major_label_text_color = text_color
+                fig_equity.yaxis.major_tick_line_color = text_color
+                fig_equity.yaxis.minor_tick_line_color = text_color
+                fig_equity.yaxis.axis_line_color = text_color
+            if fig_equity.legend:
+                fig_equity.legend.label_text_color = text_color
+                # fig_equity.legend.title_text_color = text_color
+
         # Add benchmark equity if available and requested
         if result.benchmark_res and show_benchmark:
             benchmark_equity = result.benchmark_res.returns['equity']
@@ -237,11 +280,24 @@ def plot_results(
                 x_range=fig_price.x_range, # Link x-axes
                 x_axis_type="datetime",
                 title=indicator_name.replace('_', ' ').title(),
-                y_range=DataRange1d(only_visible=True)
+                y_range=DataRange1d(only_visible=True),
+                background_fill_color=bg_color, # Explicit background
+                border_fill_color=border_color    # Explicit border
             )
             r = fig_indicator.line(x='datetime', y=indicator_name, source=source, color=next(other_indicator_colors))
             fig_indicator.yaxis.formatter = NumeralTickFormatter(format="0,0.0[00]")
-            fig_indicator.xaxis.visible = False
+            fig_indicator.xaxis.visible = False # Initially hidden
+            # Apply text colors for dark theme
+            if plot_theme == "dark":
+                fig_indicator.title.text_color = text_color
+                # x-axis is initially hidden, but set y-axis
+                if fig_indicator.yaxis:
+                    fig_indicator.yaxis.axis_label_text_color = text_color
+                    fig_indicator.yaxis.major_label_text_color = text_color
+                    fig_indicator.yaxis.major_tick_line_color = text_color
+                    fig_indicator.yaxis.minor_tick_line_color = text_color
+                    fig_indicator.yaxis.axis_line_color = text_color
+                # No legend usually on these individual indicators
             fig_indicator.add_tools(crosshair)
             fig_indicator.add_tools(HoverTool(renderers=[r], tooltips=[
                 ("Date", "@datetime{%F}"), 
@@ -254,7 +310,15 @@ def plot_results(
         last_plot = indicator_figs[-1] if indicator_figs else fig_equity
         last_plot.xaxis.visible = True
         last_plot.xaxis.formatter = DatetimeTickFormatter(months="%b %Y", days="%d %b")
-        
+        # Apply text colors to the now-visible last x-axis if dark theme
+        if plot_theme == "dark":
+            if last_plot.xaxis:
+                last_plot.xaxis.axis_label_text_color = text_color
+                last_plot.xaxis.major_label_text_color = text_color
+                last_plot.xaxis.major_tick_line_color = text_color
+                last_plot.xaxis.minor_tick_line_color = text_color
+                last_plot.xaxis.axis_line_color = text_color
+
         layout = gridplot([[fig_price], [fig_equity]] + [[fig] for fig in indicator_figs], 
                           toolbar_location="right", merge_tools=True)
 
