@@ -135,7 +135,7 @@ class BacktestResult:
             plot_theme=plot_theme
         )
         
-    def report(self, show_plot=True, stats_args=None, plot_args=None, show_benchmark_in_report: bool = True, table_format: str = 'grid'):
+    def report(self, show_plot=True, stats_args=None, plot_args=None, show_benchmark_in_report: bool = True, table_format: str = 'pipe'):
         """
         Generates a standard report containing statistics and optionally a plot.
 
@@ -144,7 +144,7 @@ class BacktestResult:
             stats_args (dict, optional): Arguments to pass to the .statistics() method.
             plot_args (dict, optional): Arguments to pass to the .plot() method.
             show_benchmark_in_report (bool, optional): Whether to include benchmark stats in the table. Defaults to True.
-            table_format (str, optional): Format string for tabulate (e.g., 'grid', 'simple', 'pipe'). Defaults to 'grid'.
+            table_format (str, optional): Format string for tabulate (e.g., 'grid', 'simple', 'pipe'). Defaults to 'pipe'.
         """
         from bokeh.plotting import show # Import moved inside method
         

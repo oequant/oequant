@@ -92,61 +92,64 @@ output_notebook()
 
 # 1. Get Data
 ticker = "QQQ"
-data = oq.get_data(ticker, start="2020-01-01", end="2023-12-31")
+start_date = "2010-01-01"
+end_date = "2025-05-01" 
+data = oq.get_data(ticker, start=start_date, end=end_date)
 
 # 2. Add Indicator & Signals
-data.ta.rsi(length=14, append=True, col_names=('rsi_14',)) # Calculate RSI
-entry_signal = "rsi_14 < 30" # Enter when RSI is below 30
-exit_signal = "rsi_14 > 70"  # Exit when RSI is above 70
+# Calculate RSI_3
+data.ta.rsi(length=3, append=True, col_names=('rsi_3',))
+# Calculate exit signal: close > high.shift()
+data['exit_signal'] = data['close'] > data['high'].shift(1)
+# Entry signal: rsi_3 < 20 (will be passed as an expression)
+entry_expression = "rsi_3 < 20"
 data.dropna(inplace=True) # Drop NaNs from indicator calculation
 
 # 3. Run Backtest
 results = oq.backtest(
     data=data,
-    entry_column=entry_signal, 
-    exit_column=exit_signal,
-    fee_frac=0.001, # 0.1% fee per trade
+    entry_column=entry_expression, 
+    exit_column='exit_signal',
+    fee_frac=0.001,
     capital=100_000
 )
 
 # 4. Show Report and Plot
-# This will print stats and show an interactive plot
-results.report(plot_args={
-    'indicators_other': ['rsi_14'], 
-    'plot_theme': 'dark' # Optional: specify theme
+results.report(show_plot=True, plot_args={
+    'indicators_other': ['rsi_3'], 
+    'per_indicator_plot_height': 160,
+    'plot_theme': 'dark' 
 }) 
-
-print(results.statistics()) # Access stats programmatically
         </code></pre>
         
-        <h3>Sample Output (Statistics Table)</h3>
-        <p>(Note: Actual values depend on data fetching period and market conditions)</p>
+        <h3>Sample Output</h3>
         <pre><code class="language-text">
 --- Backtest Report ---
-Initial Capital: 100,000.00
-Final Equity:    145,231.84  # Example Value
-Benchmark Final Equity: 168,945.12 # Example Value
+Start Date:             2010-01-04
+End Date:               2025-04-30
+Duration:               5595 days 00:00:00
+Initial Capital:        100,000.00
+Final Equity:           211,555.28
+Benchmark Final Equity: 1,174,411.72
 
 --- Performance Metrics ---
-+--------------------+------------+-------------+
 |                    |   Strategy |   Benchmark |
-+====================+============+=============+
-|           CAGR (%) |      9.78% |     13.98%  | # Example Values
-|      Avg Trade (%) |      1.55% |      68.95% |
-|       Sharpe Ratio |     0.6510 |      0.7950 |
-|      Sortino Ratio |     1.0530 |      1.1980 |
-| Time in Market (%) |     25.30% |      99.90% |
-|   Max Drawdown (%) |    -15.80% |     -28.50% |
-|      CAGR / Max DD |     0.6190 |      0.4905 |
-|     Serenity Ratio |     2.9800 |      2.4710 |
-|       Total Trades |    28.0000 |      1.0000 |
-|       Win Rate (%) |     78.57% |     100.00% |
-|      Loss Rate (%) |     21.43% |       0.00% |
-|  Avg Win Trade (%) |      2.70% |      68.95% |
-| Avg Loss Trade (%) |     -2.85% |       0.00% |
-|      Profit Factor |     3.4500 |         inf |
-|      Avg Bars Held |    26.5000 |   1005.0000 |
-+--------------------+------------+-------------+
+|====================|============|=============|
+|           CAGR (%) |      5.02% |      17.47% |
+|      Avg Trade (%) |      0.47% |   1,074.41% |
+|       Sharpe Ratio |     0.5031 |      0.8771 |
+|      Sortino Ratio |     0.3253 |      1.1264 |
+| Time in Market (%) |     15.93% |      99.97% |
+|   Max Drawdown (%) |    -16.14% |     -35.12% |
+|      CAGR / Max DD |     0.3111 |      0.4975 |
+|     Serenity Ratio |     4.3518 |      3.1370 |
+|       Total Trades |   169.0000 |      1.0000 |
+|       Win Rate (%) |     69.23% |     100.00% |
+|      Loss Rate (%) |     30.77% |       0.00% |
+|  Avg Win Trade (%) |      1.52% |   1,074.41% |
+| Avg Loss Trade (%) |     -1.90% |       0.00% |
+|      Profit Factor |     1.7373 |         inf |
+|      Avg Bars Held |     3.6331 |  3,854.0000 |
         </code></pre>
          <p>An interactive plot showing the price, trades, equity curve, benchmark, and RSI indicator would also be displayed:</p>
          <img src="oequant_plot_example.png" alt="oequant plot example" style="max-width: 100%; height: auto; display: block; margin: 20px auto;">
