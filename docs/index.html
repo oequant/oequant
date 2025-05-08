@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>oequant - Backtesting Framework</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Add minimalist favicon if desired -->
+    <!-- <link rel="icon" href="favicon.ico" type="image/x-icon"> -->
+</head>
+<body>
+    <header>
+        <h1>oequant</h1>
+        <p class="tagline">A lightweight Python framework for backtesting trading strategies.</p>
+    </header>
+
+    <section class="intro">
+        <p>
+            <strong>oequant</strong> provides a simple and intuitive way to backtest trading strategies using historical data. 
+            Built upon popular Python libraries like Pandas, NumPy, and Bokeh, it aims for clarity, speed, and ease of use, 
+            allowing you to focus on strategy development and evaluation.
+        </p>
+         <blockquote>
+            "An approximate answer to the right problem is worth a good deal more than an exact answer to an approximate problem."
+            <br><em>— John Tukey</em>
+        </blockquote>
+    </section>
+
+    <section class="features">
+        <h2>Features</h2>
+        <div class="feature-grid">
+            <div class="feature-item">
+                <span class="icon">💾</span> <!-- Placeholder icon -->
+                <h3>Data Integration</h3>
+                <p>Easily fetch historical OHLCV data using <code class="inline">yfinance</code> for single or multiple tickers.</p>
+            </div>
+            <div class="feature-item">
+                <span class="icon">⚙️</span> <!-- Placeholder icon -->
+                <h3>Flexible Backtesting</h3>
+                <p>Define entry/exit signals using DataFrame columns or Pandas query strings. Supports various position sizing methods (fractional, quantity, nominal) and commission models.</p>
+            </div>
+             <div class="feature-item">
+                <span class="icon">📊</span> <!-- Placeholder icon -->
+                <h3>Comprehensive Stats</h3>
+                <p>Calculates key performance metrics (CAGR, Sharpe, Sortino, Max Drawdown, Win Rate, etc.) including benchmark comparison.</p>
+            </div>
+             <div class="feature-item">
+                <span class="icon">📈</span> <!-- Placeholder icon -->
+                <h3>Interactive Charting</h3>
+                <p>Visualize results with interactive Bokeh plots showing price, equity curve, trades, benchmark, and technical indicators.</p>
+            </div>
+            <div class="feature-item">
+                <span class="icon">⚖️</span> <!-- Placeholder icon -->
+                <h3>Benchmark Comparison</h3>
+                <p>Automatically generates and reports Buy & Hold benchmark results for comparison.</p>
+            </div>
+             <div class="feature-item">
+                <span class="icon">🧩</span> <!-- Placeholder icon -->
+                <h3>Pandas Native</h3>
+                <p>Leverages Pandas DataFrames and integrates smoothly with libraries like <code class="inline">pandas-ta</code> for indicator calculation.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="installation">
+        <h2>Installation</h2>
+        <p>You can install the latest version directly from GitHub:</p>
+        <pre><code class="language-bash">pip install git+https://github.com/oeqaunt/oequant.git # Replace with your actual URL</code></pre>
+        <p>Requires Python 3.8+ and dependencies like <code class="inline">pandas</code>, <code class="inline">numpy</code>, <code class="inline">yfinance</code>, <code class="inline">bokeh</code>, <code class="inline">pandas-ta</code>, and <code class="inline">tabulate</code>.</p>
+    </section>
+
+    <section class="example">
+        <h2>Example</h2>
+        <p>This example demonstrates a simple RSI-based strategy on QQQ data.</p>
+        <pre><code class="language-python">
+import oequant as oq
+import pandas_ta as ta
+from bokeh.io import output_notebook
+
+# Required for Bokeh plots in notebooks
+output_notebook() 
+
+# 1. Get Data
+ticker = "QQQ"
+data = oq.get_data(ticker, start="2020-01-01", end="2023-12-31")
+
+# 2. Add Indicator & Signals
+data.ta.rsi(length=14, append=True, col_names=('rsi_14',)) # Calculate RSI
+entry_signal = "rsi_14 < 30" # Enter when RSI is below 30
+exit_signal = "rsi_14 > 70"  # Exit when RSI is above 70
+data.dropna(inplace=True) # Drop NaNs from indicator calculation
+
+# 3. Run Backtest
+results = oq.backtest(
+    data=data,
+    entry_column=entry_signal, 
+    exit_column=exit_signal,
+    fee_frac=0.001, # 0.1% fee per trade
+    capital=100_000
+)
+
+# 4. Show Report and Plot
+# This will print stats and show an interactive plot
+results.report(plot_args={
+    'indicators_other': ['rsi_14'], 
+    'plot_theme': 'dark' # Optional: specify theme
+}) 
+
+print(results.statistics()) # Access stats programmatically
+        </code></pre>
+        
+        <h3>Sample Output (Statistics Table)</h3>
+        <p>(Note: Actual values depend on data fetching period and market conditions)</p>
+        <pre><code class="language-text">
+--- Backtest Report ---
+Initial Capital: 100,000.00
+Final Equity:    145,231.84  # Example Value
+Benchmark Final Equity: 168,945.12 # Example Value
+
+--- Performance Metrics ---
++--------------------+------------+-------------+
+|                    |   Strategy |   Benchmark |
++====================+============+=============+
+|           CAGR (%) |      9.78% |     13.98%  | # Example Values
+|      Avg Trade (%) |      1.55% |      68.95% |
+|       Sharpe Ratio |     0.6510 |      0.7950 |
+|      Sortino Ratio |     1.0530 |      1.1980 |
+| Time in Market (%) |     25.30% |      99.90% |
+|   Max Drawdown (%) |    -15.80% |     -28.50% |
+|      CAGR / Max DD |     0.6190 |      0.4905 |
+|     Serenity Ratio |     2.9800 |      2.4710 |
+|       Total Trades |    28.0000 |      1.0000 |
+|       Win Rate (%) |     78.57% |     100.00% |
+|      Loss Rate (%) |     21.43% |       0.00% |
+|  Avg Win Trade (%) |      2.70% |      68.95% |
+| Avg Loss Trade (%) |     -2.85% |       0.00% |
+|      Profit Factor |     3.4500 |         inf |
+|      Avg Bars Held |    26.5000 |   1005.0000 |
++--------------------+------------+-------------+
+        </code></pre>
+         <p>An interactive plot showing the price, trades, equity curve, benchmark, and RSI indicator would also be displayed:</p>
+         <img src="oequant_plot_example.png" alt="oequant plot example" style="max-width: 100%; height: auto; display: block; margin: 20px auto;">
+    </section>
+
+    <section class="license">
+        <h2>License</h2>
+        <p>oequant is distributed under the MIT License. See the <code class="inline">LICENSE</code> file in the repository for details.</p>
+    </section>
+
+    <footer>
+        <p> <a href="https://github.com/oeqaunt/oequant">oequant on GitHub</a></p> <!-- Placeholder URL -->
+    </footer>
+
+</body>
+</html> 
