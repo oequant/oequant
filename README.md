@@ -2,6 +2,7 @@
 
 Straightforward algorithmic trading backtesting package.
 
+[![Project Website](https://img.shields.io/badge/Project%20Website-Visit-blue?style=for-the-badge)](https://oequant.github.io/oequant/)
 
 ### Try it in Google Colab directly:
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/oequant/oequant/blob/main/examples/intro.ipynb)
