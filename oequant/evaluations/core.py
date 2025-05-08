@@ -113,9 +113,55 @@ def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_fre
     rolling_max = equity_curve.cummax()
     drawdown = (equity_curve - rolling_max) / rolling_max
     stats['max_dd_pct'] = drawdown.min() * 100 if not drawdown.empty else 0.0
+    stats['max_drawdown_valley_date'] = drawdown.idxmin() if not drawdown.empty else pd.NaT
+    
+    # --- Max Drawdown Duration --- #
+    in_drawdown = drawdown < 0
+    # Find start and end points of drawdown periods
+    dd_starts = returns_df.index[in_drawdown & ~in_drawdown.shift(1).fillna(False)]
+    dd_ends = returns_df.index[~in_drawdown & in_drawdown.shift(1).fillna(False)]
+    
+    longest_dd_duration = 0
+    longest_dd_start_date = pd.NaT
+    longest_dd_end_date = pd.NaT
+    
+    if not dd_starts.empty:
+        # Align starts and ends. If the last period is still in drawdown, use the last date as its end.
+        if len(dd_ends) < len(dd_starts):
+            dd_ends = dd_ends.append(pd.Index([returns_df.index[-1]]))
+            
+        for start_date, end_date in zip(dd_starts, dd_ends):
+            # Find the actual peak *before* this drawdown started
+            peak_date = rolling_max[:start_date].idxmax()
+            # Find the recovery date (when equity >= equity at peak_date)
+            recovery_candidates = equity_curve[end_date:]
+            try:
+                recovery_date = recovery_candidates[recovery_candidates >= equity_curve.loc[peak_date]].index[0]
+            except IndexError:
+                recovery_date = pd.NaT # Drawdown not recovered by end of data
+                
+            if pd.notna(peak_date) and pd.notna(recovery_date):
+                duration_delta = recovery_date - peak_date
+                duration_days = duration_delta.days # Calculate duration in days
+                if duration_days > longest_dd_duration:
+                    longest_dd_duration = duration_days
+                    longest_dd_start_date = peak_date
+                    longest_dd_end_date = recovery_date
+            elif pd.notna(peak_date): # Drawdown started but didn't recover
+                duration_delta = returns_df.index[-1] - peak_date
+                duration_days = duration_delta.days
+                if duration_days > longest_dd_duration:
+                     longest_dd_duration = duration_days
+                     longest_dd_start_date = peak_date
+                     longest_dd_end_date = pd.NaT # Indicate not recovered
+
+    stats['max_drawdown_duration_days'] = longest_dd_duration
+    stats['max_drawdown_start_date_of_longest_dd'] = longest_dd_start_date
+    stats['max_drawdown_end_date_of_longest_dd'] = longest_dd_end_date
+    # --- End Max Drawdown Duration --- #
     
     # Absolute Max Drawdown (for Serenity)
-    peak_before_max_dd = rolling_max[drawdown.idxmin()] if not drawdown.empty and drawdown.min() < 0 else initial_equity
+    peak_before_max_dd = rolling_max[stats['max_drawdown_valley_date']] if pd.notna(stats['max_drawdown_valley_date']) and drawdown.min() < 0 else initial_equity
     max_abs_dd_currency = abs(stats['max_dd_pct']/100 * peak_before_max_dd) if peak_before_max_dd > 0 else 0
 
     # CAGR to Max DD

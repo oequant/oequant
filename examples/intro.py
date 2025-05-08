@@ -1,4 +1,6 @@
 #%%
+%load_ext autoreload
+%autoreload 2
 
 # --- Installation Check --- #
 try:
@@ -86,6 +88,21 @@ results.report(show_plot=True, plot_args={
     'per_indicator_plot_height': 160
     # 'plot_theme': 'light' # Uncomment to use light theme
 })
+
+#%%
+# Cell 5: Test plot_results_2
+print("\nGenerating plot with plot_results_2...")
+from bokeh.plotting import show # Ensure show is imported
+
+# Arguments for plot_results_2, similar to what was in plot_args for report
+# plus any specific ones for plot_results_2 if defaults are not desired.
+fig2 = oq.plot_results_2(
+    result=results,
+    indicators_other=['rsi_3'],
+    per_indicator_plot_height=160, # Match the example's preference
+    # plot_theme='light' # Optionally test light theme
+)
+show(fig2)
 
 print("\nScript finished.") 
 # %%

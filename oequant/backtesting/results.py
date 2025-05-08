@@ -134,6 +134,59 @@ class BacktestResult:
             per_indicator_plot_height=per_indicator_plot_height,
             plot_theme=plot_theme
         )
+
+    def plot2(
+        self,
+        price_col: str = 'close', 
+        indicators_price: list = None, 
+        indicators_other: list = None,
+        show_ohlc: bool = False,
+        plot_width: int = 1000,
+        main_price_plot_height: int = 300,
+        equity_plot_height: int = 150,
+        pnl_plot_height: int = 120,
+        volume_plot_height: int = 100,
+        per_indicator_plot_height: int = 80,
+        show_benchmark: bool = True,
+        plot_theme: str = "dark"
+    ) -> LayoutDOM:
+        """
+        Generates a plot of the backtest results using Bokeh, using the plot_results_2 layout.
+
+        Args:
+            price_col (str): Column in ohlcv_data for main price plot (default 'close').
+            indicators_price (list, optional): Columns from ohlcv_data for price chart overlay.
+            indicators_other (list, optional): Columns from ohlcv_data for separate subplots.
+            show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to False.
+            plot_width (int, optional): Width of the plot.
+            main_price_plot_height (int): Height of the main price plot.
+            equity_plot_height (int): Height of the equity curve plot.
+            pnl_plot_height (int): Height of the Profit/Loss subplot.
+            volume_plot_height (int): Height of the volume subplot.
+            per_indicator_plot_height (int): Height of each secondary indicator plot.
+            show_benchmark (bool): If True and benchmark available, plot benchmark equity. Defaults to True.
+            plot_theme (str, optional): Theme for the plot ("dark" or "light"). Defaults to "dark".
+
+        Returns:
+            bokeh.layouts.LayoutDOM: The Bokeh layout object.
+        """
+        from oequant.charting.core import plot_results_2 # Use the new plotting function
+        
+        return plot_results_2(
+            result=self,
+            price_col=price_col,
+            indicators_price=indicators_price,
+            indicators_other=indicators_other,
+            show_ohlc=show_ohlc,
+            plot_width=plot_width,
+            main_price_plot_height=main_price_plot_height,
+            equity_plot_height=equity_plot_height,
+            pnl_plot_height=pnl_plot_height,
+            volume_plot_height=volume_plot_height,
+            per_indicator_plot_height=per_indicator_plot_height,
+            show_benchmark=show_benchmark,
+            plot_theme=plot_theme
+        )
         
     def report(self, show_plot=True, stats_args=None, plot_args=None, show_benchmark_in_report: bool = True, table_format: str = 'pipe'):
         """
@@ -210,7 +263,7 @@ class BacktestResult:
 
         # Generate and show plot
         if show_plot:
-            fig = self.plot(**plot_args)
+            fig = self.plot2(**plot_args)
             show(fig)
         else:
             fig = None
