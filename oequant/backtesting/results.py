@@ -151,6 +151,18 @@ class BacktestResult:
         if stats_args is None: stats_args = {}
         if plot_args is None: plot_args = {}
         
+        # --- Get Dates --- 
+        start_date_str = "N/A"
+        end_date_str = "N/A"
+        duration_str = "N/A"
+        if not self.returns.empty and isinstance(self.returns.index, pd.DatetimeIndex):
+            start_date = self.returns.index[0]
+            end_date = self.returns.index[-1]
+            start_date_str = start_date.strftime('%Y-%m-%d')
+            end_date_str = end_date.strftime('%Y-%m-%d')
+            duration = end_date - start_date
+            duration_str = str(duration)
+        
         # --- Statistics Table Generation ---
         strat_stats: pd.Series = self.statistics(**stats_args)
         bench_stats: Optional[pd.Series] = None
@@ -181,10 +193,13 @@ class BacktestResult:
                                 else str(x) if not pd.isna(x) else 'nan') 
             )
             
-        # Print Initial/Final Equity Info
+        # Print Header Info
         print("--- Backtest Report ---")
-        print(f"Initial Capital: {self.initial_capital:,.2f}")
-        print(f"Final Equity:    {self.final_equity:,.2f}")
+        print(f"Start Date:             {start_date_str}")
+        print(f"End Date:               {end_date_str}")
+        print(f"Duration:               {duration_str}")
+        print(f"Initial Capital:        {self.initial_capital:,.2f}")
+        print(f"Final Equity:           {self.final_equity:,.2f}")
         if bench_stats is not None:
             print(f"Benchmark Final Equity: {self.benchmark_res.final_equity:,.2f}")
         print("\n--- Performance Metrics ---")
