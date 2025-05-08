@@ -7,6 +7,16 @@
     <link rel="stylesheet" href="style.css">
     <!-- Add minimalist favicon if desired -->
     <!-- <link rel="icon" href="favicon.ico" type="image/x-icon"> -->
+
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-G1L8ELM0E1"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+    
+      gtag('config', 'G-G1L8ELM0E1');
+    </script>
 </head>
 <body>
     <header>
@@ -150,6 +160,46 @@ Benchmark Final Equity: 168,945.12 # Example Value
     <footer>
         <p> <a href="https://github.com/oeqaunt/oequant">oequant on GitHub</a></p> <!-- Placeholder URL -->
     </footer>
+
+    <!-- Modal Structure -->
+    <div id="emailModal" class="modal modal-hidden">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <iframe width="540" height="634" src="https://sibforms.com/serve/MUIFAHwuJGA47qsBHUgJHII0uJSThhU6nMb97UqXOtiRJO53tBwcITsFQOBwKL2W-ppwa-ysDSbMMzsF07-i2GZ3zc_81ZDqyEfwhKF5C6Wyb10Fcqu9nolPPBhMGmEyCpZAdONq3QUnQAFG0NNDCr_SBoJEBrG6UhWSgyJOJJUq5tAF7uBfQ_LsfsIN8SR9z0Rhv_VxXzzMLHSE" frameborder="0" scrolling="auto" allowfullscreen style="display: block;margin-left: auto;margin-right: auto;max-width: 100%;"></iframe>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            const modal = document.getElementById('emailModal');
+            const closeButton = modal.querySelector('.close-button');
+
+            // Function to show the modal
+            const showModal = () => {
+                modal.classList.remove('modal-hidden');
+                modal.classList.add('modal-visible');
+            };
+
+            // Function to hide the modal
+            const hideModal = () => {
+                modal.classList.remove('modal-visible');
+                modal.classList.add('modal-hidden');
+            };
+
+            // Show modal after 5 seconds
+            setTimeout(showModal, 5000);
+
+            // Hide modal when close button is clicked
+            closeButton.addEventListener('click', hideModal);
+
+            // Hide modal when clicking outside the content area (on the overlay)
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) { // Check if the click is on the overlay itself
+                    hideModal();
+                }
+            });
+        });
+    </script>
 
 </body>
 </html> 

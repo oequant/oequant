@@ -117,4 +117,68 @@ footer {
     border-top: 1px solid #eee;
     color: #888;
     font-size: 0.9em;
+}
+
+/* Modal Styles */
+.modal {
+    position: fixed; /* Stay in place */
+    z-index: 1000; /* Sit on top */
+    left: 0;
+    top: 0;
+    width: 100%; /* Full width */
+    height: 100%; /* Full height */
+    overflow: auto; /* Enable scroll if needed */
+    background-color: rgba(0,0,0,0.5); /* Black w/ opacity */
+    display: flex; /* Use flexbox for centering */
+    align-items: center; /* Vertical center */
+    justify-content: center; /* Horizontal center */
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+}
+
+.modal-hidden {
+    visibility: hidden;
+    opacity: 0;
+}
+
+.modal-visible {
+    visibility: visible;
+    opacity: 1;
+}
+
+.modal-content {
+    background-color: #fefefe;
+    margin: auto; /* Centered */
+    padding: 15px; /* Reduced padding */
+    border: 1px solid #888;
+    width: 540px; /* Match iframe width */
+    max-width: 570px; /* Ensure space for padding/border */
+    border-radius: 8px;
+    position: relative;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+    /* text-align: center; Removed */
+}
+
+/* Remove margin from h4 and p as they are gone */
+/* .modal-content h4 { ... } */
+/* .modal-content p { ... } */
+
+.close-button {
+    color: #aaa;
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.close-button:hover,
+.close-button:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.modal-content iframe {
+    border: 1px solid #ccc; /* Optional: add border to iframe */
+    border-radius: 4px;
 } 
