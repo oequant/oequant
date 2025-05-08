@@ -14,7 +14,7 @@ def _get_annualization_factor(returns_index: pd.DatetimeIndex) -> float:
         return 12  # Monthly
     return 1     # Assume already annualized or unknown
 
-def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_free_rate_annual: float = 0.0) -> dict:
+def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_free_rate_annual: float = 0.0) -> pd.Series:
     """
     Calculates various performance statistics from a BacktestResult.
 
@@ -25,7 +25,7 @@ def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_fre
         risk_free_rate_annual (float, optional): Annual risk-free rate for Sharpe/Sortino. Defaults to 0.0.
 
     Returns:
-        dict: A dictionary containing the calculated performance statistics.
+        pd.Series: A pandas Series containing the calculated performance statistics.
     """
     if PnL_type not in ['gross', 'net']:
         raise ValueError("PnL_type must be either 'gross' or 'net'.")
@@ -50,7 +50,7 @@ def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_fre
         stats['avg_win_trade_pct'] = 0.0
         stats['avg_loss_trade_pct'] = 0.0
         stats['profit_factor'] = np.nan
-        return stats
+        return pd.Series(stats)
 
     # Determine PnL columns to use
     ret_col_frac = f'return_{PnL_type}_frac'
@@ -171,4 +171,9 @@ def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_fre
         stats['avg_loss_trade_pct'] = 0.0
         stats['profit_factor'] = 1.0 # Align with test for no trades
 
-    return {k: (round(v, 4) if isinstance(v, float) and not np.isnan(v) and not np.isinf(v) else v) for k, v in stats.items()} 
+    # Round floats before converting to Series, but keep NaN/inf as is
+    for k, v in stats.items():
+        if isinstance(v, float) and not (np.isnan(v) or np.isinf(v)):
+            stats[k] = round(v, 4)
+            
+    return pd.Series(stats) 

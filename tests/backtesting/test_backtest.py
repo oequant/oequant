@@ -413,5 +413,68 @@ class TestBacktester:
 
         # Nominal sizing should result in 0 quantity if price is 0
         result_nom = backtest(data, entry_column='entry', exit_column='exit', 
-                              size=1000, size_unit='nominal', entry_price_col='close')
+                              size=1000, size_unit='nominal', entry_price_col='close', benchmark=False) # Disable benchmark for this specific edge case
         assert result_nom.trades.empty # No trade should occur 
+        assert result_nom.benchmark_res is None # Ensure benchmark wasn't run accidentally
+
+    # --- Tests for Benchmark --- 
+
+    def test_benchmark_generation_default(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True # A simple strategy trade
+        data.loc[data.index[5], 'exit'] = True
+
+        # Run with benchmark=True (default)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=10, size_unit='quantity', capital=10000, signal_price_col='close') 
+
+        assert result.benchmark_res is not None
+        assert isinstance(result.benchmark_res, BacktestResult)
+        
+        # Check benchmark trade (should be B&H on 'close')
+        bench_trades = result.benchmark_res.trades
+        assert len(bench_trades) == 1
+        bench_trade = bench_trades.iloc[0]
+        assert bench_trade['entry_time'] == data.index[0]
+        assert bench_trade['exit_time'] == data.index[-1]
+        assert bench_trade['entry_price'] == pytest.approx(data['close'].iloc[0])
+        assert bench_trade['exit_price'] == pytest.approx(data['close'].iloc[-1])
+        assert bench_trade['fee_total_currency'] == 0.0
+        
+        # Check benchmark equity
+        bench_returns = result.benchmark_res.returns
+        assert bench_returns['equity'].iloc[0] == result.initial_capital
+        # Final benchmark equity should reflect B&H gain/loss
+        expected_bench_qty = result.initial_capital / data['close'].iloc[0]
+        expected_bench_pnl = expected_bench_qty * (data['close'].iloc[-1] - data['close'].iloc[0])
+        assert result.benchmark_res.final_equity == pytest.approx(result.initial_capital + expected_bench_pnl)
+
+    def test_benchmark_disabled(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        result = backtest(data, entry_column='entry', exit_column='exit', benchmark=False)
+        assert result.benchmark_res is None
+
+    def test_benchmark_with_specific_column(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data['benchmark_price'] = data['open'] # Use open price for benchmark B&H
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          benchmark=True, benchmark_col='benchmark_price', capital=10000)
+
+        assert result.benchmark_res is not None
+        bench_trades = result.benchmark_res.trades
+        assert len(bench_trades) == 1
+        bench_trade = bench_trades.iloc[0]
+        assert bench_trade['entry_price'] == pytest.approx(data['benchmark_price'].iloc[0])
+        assert bench_trade['exit_price'] == pytest.approx(data['benchmark_price'].iloc[-1])
+        
+        expected_bench_qty = result.initial_capital / data['benchmark_price'].iloc[0]
+        expected_bench_pnl = expected_bench_qty * (data['benchmark_price'].iloc[-1] - data['benchmark_price'].iloc[0])
+        assert result.benchmark_res.final_equity == pytest.approx(result.initial_capital + expected_bench_pnl)
+
+    def test_benchmark_invalid_column(self, sample_ohlcv_data):
+        data = sample_ohlcv_data
+        with pytest.raises(ValueError, match="Specified benchmark_col 'invalid_col' not found in data columns"): # Match part of error
+            backtest(data, entry_column='entry', exit_column='exit', benchmark=True, benchmark_col='invalid_col') 

@@ -5,8 +5,9 @@ import pytest
 from bokeh.layouts import LayoutDOM, column # Import Bokeh layout type and a simple layout
 from bokeh.plotting import figure # Import figure to create a simple layout
 from unittest.mock import patch, MagicMock
+from tabulate import tabulate # Import tabulate for mocking if needed
 
-from oequant.backtesting.results import BacktestResult
+from oequant.backtesting.results import BacktestResult, _prettify_stat_name
 # Need data creation helpers or fixtures
 
 @pytest.fixture
@@ -52,23 +53,34 @@ class TestBacktestResultMethods:
         result = sample_backtest_result_for_methods
         # Patch the function in its original module
         with patch('oequant.evaluations.core.calculate_statistics') as mock_calc_stats:
-            mock_calc_stats.return_value = {'test_stat': 123, '_args_key': ('net', 0.0)} # Keep _args_key for internal logic test
-            stats = result.statistics(PnL_type='net', risk_free_rate_annual=0.0)
-            mock_calc_stats.assert_called_once_with(result, PnL_type='net', risk_free_rate_annual=0.0)
-            assert stats == {'test_stat': 123}
+            # Mock calculate_statistics to return a Series, as the actual function does
+            mock_return_series = pd.Series({'test_stat': 123})
+            mock_calc_stats.return_value = mock_return_series 
             
+            stats_series = result.statistics(PnL_type='net', risk_free_rate_annual=0.0)
+            
+            # Assert that calculate_statistics was called correctly
+            mock_calc_stats.assert_called_once_with(result, PnL_type='net', risk_free_rate_annual=0.0)
+            # Assert the final return type is Series and content matches
+            assert isinstance(stats_series, pd.Series)
+            pd.testing.assert_series_equal(stats_series, mock_return_series, check_names=False)
+
             # Test caching - call again, should not call calculate_statistics again
             mock_calc_stats.reset_mock()
             stats_cached = result.statistics(PnL_type='net', risk_free_rate_annual=0.0)
             mock_calc_stats.assert_not_called()
-            assert stats_cached == {'test_stat': 123}
+            assert isinstance(stats_cached, pd.Series)
+            pd.testing.assert_series_equal(stats_cached, mock_return_series, check_names=False)
 
             # Test cache invalidation - call with different args
             mock_calc_stats.reset_mock()
-            mock_calc_stats.return_value = {'test_stat_gross': 456, '_args_key': ('gross', 0.0)}
+            mock_return_series_gross = pd.Series({'test_stat_gross': 456})
+            mock_calc_stats.return_value = mock_return_series_gross
+
             stats_gross = result.statistics(PnL_type='gross', risk_free_rate_annual=0.0)
             mock_calc_stats.assert_called_once_with(result, PnL_type='gross', risk_free_rate_annual=0.0)
-            assert stats_gross == {'test_stat_gross': 456}
+            assert isinstance(stats_gross, pd.Series)
+            pd.testing.assert_series_equal(stats_gross, mock_return_series_gross, check_names=False)
 
     def test_plot_method(self, sample_backtest_result_for_methods):
         """Test the .plot() method calls plot_results."""
@@ -98,33 +110,140 @@ class TestBacktestResultMethods:
     @patch('bokeh.plotting.show') # Correct patch target
     @patch('builtins.print')
     def test_report_method(self, mock_print, mock_bokeh_show, sample_backtest_result_for_methods):
-        """Test the .report() method calls statistics and plot."""
+        """Test the .report() method calls statistics, formats, and prints using tabulate."""
         result = sample_backtest_result_for_methods
-        mock_stats_dict = {'cagr_pct': 10.5, 'total_trades': 1}
-        # Use a real (empty) Bokeh layout instead of MagicMock for serialization
-        mock_layout = column() # An empty column layout is serializable
+        # Mock statistics to return a Series
+        mock_stats_series = pd.Series({'cagr_pct': 10.5, 'total_trades': 1, 'sharpe_ratio': 1.2})
+        mock_layout = column() 
         
-        # Mock the instance methods .statistics() and .plot()
-        with patch.object(result, 'statistics', return_value=mock_stats_dict) as mock_stats_method, \
+        with patch.object(result, 'statistics', return_value=mock_stats_series) as mock_stats_method, \
              patch.object(result, 'plot', return_value=mock_layout) as mock_plot_method:
             
-            # Test report with plot
-            plot_args_test = {'show_ohlc': True}
-            stats_out, layout_out = result.report(show_plot=True, stats_args={'PnL_type': 'gross'}, plot_args=plot_args_test)
+            result.report(show_plot=True, stats_args={'PnL_type': 'gross'}, plot_args={'show_ohlc': True}, table_format='plain') # Use plain for simpler assertion
             
             mock_stats_method.assert_called_once_with(PnL_type='gross')
-            mock_plot_method.assert_called_once_with(**plot_args_test)
-            mock_bokeh_show.assert_called_once_with(mock_layout) # Check that bokeh.show is called
-            mock_print.assert_called() # Check that stats are printed
-            assert stats_out is mock_stats_dict
-            assert layout_out is mock_layout
+            mock_plot_method.assert_called_once_with(show_ohlc=True)
+            mock_bokeh_show.assert_called_once_with(mock_layout)
+            
+            # Check print output for key elements of the tabulate table
+            printed_text = "\n".join([call_args[0][0] for call_args in mock_print.call_args_list if call_args[0]])
+            # print(f"\nDEBUG test_report_method:\n{printed_text}\n") # Keep for debugging
+            
+            assert "--- Backtest Report ---" in printed_text
+            assert "Initial Capital:" in printed_text
+            assert "Final Equity:" in printed_text
+            assert "--- Performance Metrics ---" in printed_text
+            assert "Strategy" in printed_text # Header from tabulate
+            assert _prettify_stat_name('cagr_pct') in printed_text # Check pretty index name
+            assert "10.50%" in printed_text # Check formatted value
+            assert _prettify_stat_name('sharpe_ratio') in printed_text
+            assert "1.2000" in printed_text
+            assert _prettify_stat_name('total_trades') in printed_text
+            assert "1" in printed_text 
 
-            # Test report without plot
-            mock_stats_method.reset_mock()
-            mock_plot_method.reset_mock()
-            mock_bokeh_show.reset_mock()
-            stats_out_no_plot, layout_out_no_plot = result.report(show_plot=False)
-            mock_stats_method.assert_called_once_with() # Default args
+    @patch('bokeh.plotting.show')
+    @patch('builtins.print')
+    def test_report_method_no_plot(self, mock_print, mock_bokeh_show, sample_backtest_result_for_methods):
+        result = sample_backtest_result_for_methods
+        mock_stats_series = pd.Series({'cagr_pct': 10.5, 'total_trades': 1})
+        with patch.object(result, 'statistics', return_value=mock_stats_series) as mock_stats_method, \
+             patch.object(result, 'plot') as mock_plot_method:
+
+            result.report(show_plot=False, table_format='plain')
+            mock_stats_method.assert_called_once_with() # Default args for stats
             mock_plot_method.assert_not_called()
             mock_bokeh_show.assert_not_called()
-            assert layout_out_no_plot is None 
+            printed_text = "\n".join([call_args[0][0] for call_args in mock_print.call_args_list if call_args[0]])
+            assert "Strategy" in printed_text
+            assert _prettify_stat_name('cagr_pct') in printed_text
+            assert "10.50%" in printed_text
+
+    @patch('builtins.print')
+    def test_report_with_benchmark(self, mock_print, sample_backtest_result_for_methods):
+        strategy_result = sample_backtest_result_for_methods
+        # Create a simple benchmark result
+        benchmark_res_obj = BacktestResult(trades=pd.DataFrame(), returns=pd.DataFrame(), initial_capital=10000, final_equity=10200, ohlcv_data=pd.DataFrame())
+        strategy_result.benchmark_res = benchmark_res_obj
+
+        mock_strat_stats = pd.Series({'cagr_pct': 10.5, 'sharpe_ratio': 1.2, 'total_trades': 1})
+        mock_bench_stats = pd.Series({'cagr_pct': 5.0, 'sharpe_ratio': 0.8, 'total_trades': 1})
+
+        with patch.object(strategy_result, 'statistics', return_value=mock_strat_stats) as mock_strat_stats_method, \
+             patch.object(benchmark_res_obj, 'statistics', return_value=mock_bench_stats) as mock_bench_stats_method, \
+             patch('oequant.backtesting.results.show'): # Patch show as plot is not the focus here
+            
+            strategy_result.report(show_plot=False, show_benchmark_in_report=True, table_format='plain')
+
+            mock_strat_stats_method.assert_called_once()
+            mock_bench_stats_method.assert_called_once()
+
+            printed_text = "\n".join([call_args[0][0] for call_args in mock_print.call_args_list if call_args[0]])
+            # print(f"\nDEBUG test_report_with_benchmark:\n{printed_text}\n")
+            
+            assert "Strategy" in printed_text 
+            assert "Benchmark" in printed_text # Check for benchmark header
+            assert "Benchmark Final Equity: 10,200.00" in printed_text
+            assert _prettify_stat_name('cagr_pct') in printed_text
+            assert "10.50%" in printed_text
+            assert "5.00%" in printed_text
+            assert _prettify_stat_name('sharpe_ratio') in printed_text
+            assert "1.2000" in printed_text
+            assert "0.8000" in printed_text
+            assert _prettify_stat_name('total_trades') in printed_text
+            assert "1" in printed_text # Should appear multiple times
+            
+    @patch('builtins.print')
+    def test_report_with_benchmark_hidden(self, mock_print, sample_backtest_result_for_methods):
+        strategy_result = sample_backtest_result_for_methods
+        benchmark_res_obj = MagicMock(spec=BacktestResult) # Mock benchmark
+        strategy_result.benchmark_res = benchmark_res_obj
+
+        mock_strat_stats = pd.Series({'cagr_pct': 10.5, 'sharpe_ratio': 1.2})
+        
+        with patch.object(strategy_result, 'statistics', return_value=mock_strat_stats) as mock_strat_stats_method, \
+             patch.object(benchmark_res_obj, 'statistics') as mock_bench_stats_method, \
+             patch('oequant.backtesting.results.show'):
+
+            strategy_result.report(show_plot=False, show_benchmark_in_report=False, table_format='plain')
+
+            mock_strat_stats_method.assert_called_once()
+            mock_bench_stats_method.assert_not_called() # Benchmark stats should not be fetched
+
+            printed_text = "\n".join([call_args[0][0] for call_args in mock_print.call_args_list if call_args[0]])
+            # print(f"\nDEBUG test_report_with_benchmark_hidden:\n{printed_text}\n")
+            assert "Benchmark" not in printed_text # Header should be absent
+            assert "Strategy" in printed_text
+            assert _prettify_stat_name('cagr_pct') in printed_text
+            assert "10.50%" in printed_text
+            assert "Benchmark Final Equity" not in printed_text
+
+    @patch('builtins.print')
+    def test_report_metric_missing_in_benchmark(self, mock_print, sample_backtest_result_for_methods):
+        strategy_result = sample_backtest_result_for_methods
+        benchmark_res_obj = BacktestResult( # Real benchmark, missing stats
+            trades=pd.DataFrame(), returns=pd.DataFrame(), 
+            initial_capital=10000, final_equity=10000, ohlcv_data=pd.DataFrame()
+        )
+        strategy_result.benchmark_res = benchmark_res_obj
+
+        mock_strat_stats = pd.Series({'cagr_pct': 10.5, 'some_custom_stat': 777})
+        # Benchmark stats might not have 'some_custom_stat'. Note: calculate_statistics now returns Series
+        mock_bench_stats = pd.Series({'cagr_pct': 5.0})
+
+        with patch.object(strategy_result, 'statistics', return_value=mock_strat_stats), \
+             patch.object(benchmark_res_obj, 'statistics', return_value=mock_bench_stats), \
+             patch('oequant.backtesting.results.show'):
+            
+            strategy_result.report(show_plot=False, show_benchmark_in_report=True, table_format='plain')
+            printed_text = "\n".join([call_args[0][0] for call_args in mock_print.call_args_list if call_args[0]])
+            # print(f"\nDEBUG test_report_metric_missing_in_benchmark:\n{printed_text}\n")
+
+            assert "Strategy" in printed_text
+            assert "Benchmark" in printed_text
+            assert _prettify_stat_name('cagr_pct') in printed_text
+            assert "10.50%" in printed_text
+            assert "5.00%" in printed_text
+            assert _prettify_stat_name('some_custom_stat') in printed_text
+            assert "777" in printed_text
+            assert "nan" in printed_text # Check for NaN representation from tabulate/formatting
+            # The exact line check is removed for robustness 

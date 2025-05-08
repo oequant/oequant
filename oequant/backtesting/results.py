@@ -3,10 +3,40 @@ import numpy as np
 import matplotlib.pyplot as plt
 from bokeh.plotting import show
 from bokeh.layouts import LayoutDOM
+from typing import Optional, Tuple # Added Tuple
+from tabulate import tabulate # Added import
 
 # Removed top-level imports causing circular dependency
 # from oequant.evaluations.core import calculate_statistics
 # from oequant.charting.core import plot_results 
+
+# Forward declaration for type hinting self-reference
+SelfBacktestResult = Optional['BacktestResult']
+# Type hint for the cache tuple
+CacheTuple = Optional[Tuple[tuple, pd.Series]]
+
+# --- Helper for pretty stat names ---
+_PRETTY_STAT_NAMES = {
+    'cagr_pct': 'CAGR (%)',
+    'return_per_trade_pct': 'Avg Trade (%)',
+    'sharpe_ratio': 'Sharpe Ratio',
+    'sortino_ratio': 'Sortino Ratio',
+    'serenity_ratio': 'Serenity Ratio',
+    'pct_in_position': 'Time in Market (%)',
+    'max_dd_pct': 'Max Drawdown (%)',
+    'cagr_to_max_dd': 'CAGR / Max DD',
+    'total_trades': 'Total Trades',
+    'win_rate_pct': 'Win Rate (%)',
+    'loss_rate_pct': 'Loss Rate (%)',
+    'avg_win_trade_pct': 'Avg Win Trade (%)',
+    'avg_loss_trade_pct': 'Avg Loss Trade (%)',
+    'profit_factor': 'Profit Factor'
+}
+_PERCENTAGE_KEYS = {k for k, v in _PRETTY_STAT_NAMES.items() if '%' in v}
+
+def _prettify_stat_name(key):
+    return _PRETTY_STAT_NAMES.get(key, key.replace('_', ' ').title())
+# --- End Helper ---
 
 class BacktestResult:
     """
@@ -18,38 +48,46 @@ class BacktestResult:
         initial_capital (float): Initial capital for the backtest.
         final_equity (float): Equity at the end of the backtest.
         ohlcv_data (pd.DataFrame): The original OHLCV data used for the backtest.
+        benchmark_res (Optional[BacktestResult]): Stores the BacktestResult for a benchmark run, if any.
     """
-    def __init__(self, trades: pd.DataFrame, returns: pd.DataFrame, initial_capital: float, final_equity: float, ohlcv_data: pd.DataFrame):
+    def __init__(self, trades: pd.DataFrame, returns: pd.DataFrame, initial_capital: float, final_equity: float, ohlcv_data: pd.DataFrame, benchmark_res: SelfBacktestResult = None):
         self.trades = trades
         self.returns = returns
         self.initial_capital = initial_capital
         self.final_equity = final_equity
         self.ohlcv_data = ohlcv_data # Store original data
-        self._stats = None # Cache for statistics
+        self._cached_stats_tuple: CacheTuple = None # Cache for statistics (key, series)
+        self.benchmark_res = benchmark_res # Store benchmark result
 
-    def statistics(self, PnL_type: str = 'net', risk_free_rate_annual: float = 0.0) -> dict:
+    def statistics(self, PnL_type: str = 'net', risk_free_rate_annual: float = 0.0) -> pd.Series:
         """
         Calculates and returns performance statistics for the backtest.
+        Uses internal caching.
 
         Args:
             PnL_type (str, optional): Use 'gross' or 'net' P&L. Defaults to 'net'.
             risk_free_rate_annual (float, optional): Annual risk-free rate. Defaults to 0.0.
 
         Returns:
-            dict: Dictionary of performance statistics.
+            pd.Series: Series of performance statistics.
         """
-        # Import moved inside method
         from oequant.evaluations.core import calculate_statistics
         
         args_key = (PnL_type, risk_free_rate_annual)
-        if self._stats is None or self._stats.get('_args_key') != args_key:
-            self._stats = calculate_statistics(self, PnL_type=PnL_type, risk_free_rate_annual=risk_free_rate_annual)
-            self._stats['_args_key'] = args_key # Store args used for caching
+        if self.benchmark_res:
+            args_key += (self.benchmark_res.final_equity,) # Include for cache invalidation
+
+        # Check cache
+        if self._cached_stats_tuple is not None and self._cached_stats_tuple[0] == args_key:
+            return self._cached_stats_tuple[1].copy() # Return copy of cached Series
+
+        # Cache miss or invalid: recalculate
+        new_stats_series = calculate_statistics(self, PnL_type=PnL_type, risk_free_rate_annual=risk_free_rate_annual)
         
-        # Return a copy without the internal args key
-        stats_copy = self._stats.copy()
-        stats_copy.pop('_args_key', None)
-        return stats_copy
+        # Update cache
+        self._cached_stats_tuple = (args_key, new_stats_series)
+        
+        return new_stats_series.copy() # Return copy of newly calculated Series
 
     def plot(
         self,
@@ -84,7 +122,7 @@ class BacktestResult:
             plot_width=plot_width
         )
         
-    def report(self, show_plot=True, stats_args=None, plot_args=None):
+    def report(self, show_plot=True, stats_args=None, plot_args=None, show_benchmark_in_report: bool = True, table_format: str = 'grid'):
         """
         Generates a standard report containing statistics and optionally a plot.
 
@@ -92,33 +130,55 @@ class BacktestResult:
             show_plot (bool, optional): Whether to generate and display the plot. Defaults to True.
             stats_args (dict, optional): Arguments to pass to the .statistics() method.
             plot_args (dict, optional): Arguments to pass to the .plot() method.
+            show_benchmark_in_report (bool, optional): Whether to include benchmark stats in the table. Defaults to True.
+            table_format (str, optional): Format string for tabulate (e.g., 'grid', 'simple', 'pipe'). Defaults to 'grid'.
         """
-        # Import moved inside method (needed for plt.show)
-        from bokeh.plotting import show
+        from bokeh.plotting import show # Import moved inside method
         
         if stats_args is None: stats_args = {}
         if plot_args is None: plot_args = {}
         
-        # Calculate statistics
-        stats_dict = self.statistics(**stats_args)
+        # --- Statistics Table Generation ---
+        strat_stats: pd.Series = self.statistics(**stats_args)
+        bench_stats: Optional[pd.Series] = None
         
-        # Print statistics
+        stats_df_dict = {'Strategy': strat_stats}
+        if self.benchmark_res and show_benchmark_in_report:
+            bench_stats = self.benchmark_res.statistics(**stats_args)
+            stats_df_dict['Benchmark'] = bench_stats
+            
+        stats_df = pd.DataFrame(stats_df_dict)
+        
+        # Prettify index
+        stats_df.index = stats_df.index.map(_prettify_stat_name)
+        
+        # Store original keys before prettifying index for formatting check
+        original_keys = strat_stats.index if strat_stats is not None else pd.Index([])
+        key_map = {v: k for k, v in _PRETTY_STAT_NAMES.items()} # Map pretty back to original
+
+        # Format numerical columns
+        for col in stats_df.columns:
+            stats_df[col] = stats_df[col].apply(
+                lambda x: f"{x:,.2f}%" if isinstance(x, (int, float))
+                          # Check original key to see if it should be % formatted
+                          and key_map.get(stats_df[stats_df[col] == x].index[0] if not pd.isna(x) else '-', '-') in _PERCENTAGE_KEYS
+                          # Fallback formatting for floats (non-pct, non-inf/nan)
+                          else (f"{x:,.4f}" if isinstance(x, (int, float)) and not (np.isnan(x) or np.isinf(x))
+                                # Fallback for non-float or inf/nan
+                                else str(x) if not pd.isna(x) else 'nan') 
+            )
+            
+        # Print Initial/Final Equity Info
         print("--- Backtest Report ---")
         print(f"Initial Capital: {self.initial_capital:,.2f}")
         print(f"Final Equity:    {self.final_equity:,.2f}")
-        print("\n--- Performance Metrics --- ('{stats_args.get('PnL_type', 'net')}' PnL)")
-        for key, value in stats_dict.items():
-            label = key.replace('_', ' ').title()
-            if isinstance(value, float):
-                if 'pct' in key:
-                    print(f"{label:<25}: {value:,.2f}%")
-                elif np.isinf(value) or np.isnan(value):
-                     print(f"{label:<25}: {value}")
-                else:
-                    print(f"{label:<25}: {value:,.4f}")
-            else:
-                 print(f"{label:<25}: {value}")
-        print("-----------------------")
+        if bench_stats is not None:
+            print(f"Benchmark Final Equity: {self.benchmark_res.final_equity:,.2f}")
+        print("\n--- Performance Metrics ---")
+        
+        # Print the table using tabulate
+        print(tabulate(stats_df, headers='keys', tablefmt=table_format, stralign="right"))
+        # --- End Statistics Table Generation ---
 
         # Generate and show plot
         if show_plot:
@@ -128,44 +188,52 @@ class BacktestResult:
             fig = None
 
         # Return both for programmatic access if needed
-        return stats_dict, fig 
+        return strat_stats, fig 
 
     def __repr__(self):
-        stats = self.statistics()
-        return (
+        stats = self.statistics() # Ensure stats are calculated if needed by representation
+        repr_str = (
             f"<BacktestResult: Equity {self.initial_capital:,.2f} -> {self.final_equity:,.2f}, "
             f"Trades: {len(self.trades)}, "
-            f"CAGR: {stats.get('cagr_pct', 'N/A'):.2f}%, "
-            f"Max DD: {stats.get('max_drawdown_pct', 'N/A'):.2f}%, "
-            f"Sharpe: {stats.get('sharpe_ratio', 'N/A'):.2f}, "
-            f"Time in Pos: {stats.get('pct_time_in_position', 'N/A'):.2f}%>"
+            f"CAGR: {stats.get('cagr_pct', 'N/A') if isinstance(stats.get('cagr_pct'), (int, float)) else 'N/A'}, " # defensive formatting
+            f"Max DD: {stats.get('max_drawdown_pct', 'N/A') if isinstance(stats.get('max_drawdown_pct'), (int, float)) else 'N/A'}, "
+            f"Sharpe: {stats.get('sharpe_ratio', 'N/A') if isinstance(stats.get('sharpe_ratio'), (int, float)) else 'N/A'}, "
+            f"Time in Pos: {stats.get('pct_time_in_position', 'N/A') if isinstance(stats.get('pct_time_in_position'), (int, float)) else 'N/A'}%"
         )
+        if self.benchmark_res:
+            # Ensure benchmark stats are also defensively formatted
+            bench_stats = self.benchmark_res.statistics() # Calculate benchmark stats for its representation
+            bench_cagr = bench_stats.get('cagr_pct', 'N/A')
+            bench_cagr_str = f"{bench_cagr:.2f}%" if isinstance(bench_cagr, (int, float)) else str(bench_cagr)
+            repr_str += f" | Benchmark CAGR: {bench_cagr_str}"
+        repr_str += ">"
+        return repr_str
 
     def _repr_html_(self):
         stats = self.statistics()
-        # Basic HTML representation, can be enhanced with CSS
         html = "<h4>BacktestResult</h4>"
-        html += "<table>"
-        html += f"<tr><td>Initial Capital</td><td>{self.initial_capital:,.2f}</td></tr>"
-        html += f"<tr><td>Final Equity</td><td>{self.final_equity:,.2f}</td></tr>"
-        html += f"<tr><td>Total Trades</td><td>{len(self.trades)}</td></tr>"
+        html += "<table style='border-collapse: collapse; border: 1px solid black;'>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Initial Capital</td><td style='border: 1px solid black; padding: 5px;'>{self.initial_capital:,.2f}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Final Equity</td><td style='border: 1px solid black; padding: 5px;'>{self.final_equity:,.2f}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Total Trades</td><td style='border: 1px solid black; padding: 5px;'>{len(self.trades)}</td></tr>"
         
-        # Safely get stats, format them, and handle potential 'N/A' or missing keys
-        cagr = stats.get('cagr_pct', 'N/A')
-        cagr_str = f"{cagr:.2f}%" if isinstance(cagr, (int, float)) else str(cagr)
-        html += f"<tr><td>CAGR</td><td>{cagr_str}</td></tr>"
-        
-        max_dd = stats.get('max_drawdown_pct', 'N/A')
-        max_dd_str = f"{max_dd:.2f}%" if isinstance(max_dd, (int, float)) else str(max_dd)
-        html += f"<tr><td>Max Drawdown</td><td>{max_dd_str}</td></tr>"
-        
-        sharpe = stats.get('sharpe_ratio', 'N/A')
-        sharpe_str = f"{sharpe:.2f}" if isinstance(sharpe, (int, float)) else str(sharpe)
-        html += f"<tr><td>Sharpe Ratio</td><td>{sharpe_str}</td></tr>"
+        def format_stat(value, is_pct=False):
+            if isinstance(value, (int, float)) and not (np.isinf(value) or np.isnan(value)):
+                return f"{value:.2f}%" if is_pct else f"{value:.2f}"
+            return str(value)
 
-        time_in_pos = stats.get('pct_time_in_position', 'N/A')
-        time_in_pos_str = f"{time_in_pos:.2f}%" if isinstance(time_in_pos, (int, float)) else str(time_in_pos)
-        html += f"<tr><td>Time in Position</td><td>{time_in_pos_str}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>CAGR</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('cagr_pct'), is_pct=True)}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Max Drawdown</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('max_drawdown_pct'), is_pct=True)}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Sharpe Ratio</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('sharpe_ratio'))}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Time in Position</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('pct_time_in_position'), is_pct=True)}</td></tr>"
         
+        if self.benchmark_res:
+            bench_stats = self.benchmark_res.statistics()
+            html += "<tr><td colspan='2' style='border: 1px solid black; padding: 5px; text-align: center; background-color: #f0f0f0;'><b>Benchmark</b></td></tr>"
+            html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Initial Capital</td><td style='border: 1px solid black; padding: 5px;'>{self.benchmark_res.initial_capital:,.2f}</td></tr>"
+            html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Final Equity</td><td style='border: 1px solid black; padding: 5px;'>{self.benchmark_res.final_equity:,.2f}</td></tr>"
+            html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark CAGR</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(bench_stats.get('cagr_pct'), is_pct=True)}</td></tr>"
+            html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Max Drawdown</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(bench_stats.get('max_drawdown_pct'), is_pct=True)}</td></tr>"
+
         html += "</table>"
         return html 

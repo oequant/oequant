@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import math
 from .results import BacktestResult
+from typing import Optional # Add Optional
 
 class Backtester:
     def __init__(self):
@@ -21,7 +22,9 @@ class Backtester:
         fee_curr: float = 0.0, # Static currency fee per unit
         capital: float = 100_000.0,
         allow_fractional_positions: bool = True,
-        signal_price_col: str = 'close' # Column used for MTM calculations
+        signal_price_col: str = 'close', # Column used for MTM calculations
+        benchmark: bool = True, # Generate benchmark B&H results by default
+        benchmark_col: Optional[str] = None # Column for benchmark B&H, defaults to signal_price_col
     ) -> BacktestResult:
         """
         Core backtesting logic.
@@ -52,6 +55,10 @@ class Backtester:
             allow_fractional_positions (bool, optional): Whether to allow fractional shares/units.
                 Defaults to True.
             signal_price_col (str, optional): Column for mark-to-market calculations. Defaults to 'close'.
+            benchmark (bool, optional): Whether to compute and include Buy & Hold benchmark results.
+                Defaults to True.
+            benchmark_col (Optional[str], optional): Column to use for Buy & Hold benchmark calculations.
+                If None, defaults to `signal_price_col`. Defaults to None.
 
         Returns:
             BacktestResult: Object containing trades, returns, and other results.
@@ -360,8 +367,47 @@ class Backtester:
                 if col in trades_df.columns:
                      trades_df[col] = pd.to_numeric(trades_df[col], errors='coerce')
 
-        # Return the result object, passing the ORIGINAL data (not data_copy with temp cols)
-        return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=capital, final_equity=current_equity, ohlcv_data=data) # Pass original data
+        # --- Benchmark Calculation --- 
+        benchmark_res = None
+        if benchmark:
+            # Determine benchmark price column
+            bench_price_col_actual = benchmark_col if benchmark_col is not None else signal_price_col
+            if bench_price_col_actual not in data.columns:
+                 # Use original data for column check
+                raise ValueError(f"Specified benchmark_col '{bench_price_col_actual}' not found in data columns: {list(data.columns)}")
+            
+            # Create Buy & Hold signals
+            bench_data = data.copy()
+            bench_data['__benchmark_entry__'] = False
+            bench_data['__benchmark_exit__'] = False
+            if not bench_data.empty:
+                bench_data.iloc[0, bench_data.columns.get_loc('__benchmark_entry__')] = True
+                bench_data.iloc[-1, bench_data.columns.get_loc('__benchmark_exit__')] = True
+                
+                # Run benchmark backtest using the same Backtester instance but simplified parameters
+                # IMPORTANT: Pass benchmark=False to the internal call to prevent recursion!
+                benchmark_res = self.backtest(
+                    data=bench_data, # Use the copy with benchmark signals
+                    entry_column='__benchmark_entry__',
+                    exit_column='__benchmark_exit__',
+                    entry_price_col=bench_price_col_actual,
+                    exit_price_col=bench_price_col_actual,
+                    signal_price_col=bench_price_col_actual,
+                    size=None, # Use 100% equity for B&H
+                    size_unit='fraction',
+                    fee_frac=0.0, # No fees for benchmark
+                    fee_curr=0.0,
+                    capital=capital, # Same starting capital
+                    allow_fractional_positions=allow_fractional_positions, # Same fractional setting
+                    benchmark=False # *** CRITICAL: Prevent recursion ***
+                )
+
+        # Clean up temp columns from strategy evaluation before returning original data
+        # We passed the original 'data' into BacktestResult, so no need to drop from it.
+        # data_copy was used internally and can be discarded.
+
+        # Return the result object, passing the ORIGINAL data and potential benchmark result
+        return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=capital, final_equity=current_equity, ohlcv_data=data, benchmark_res=benchmark_res)
 
 
 def backtest(
@@ -376,7 +422,9 @@ def backtest(
     fee_curr: float = 0.0,
     capital: float = 100_000.0,
     allow_fractional_positions: bool = True,
-    signal_price_col: str = 'close'
+    signal_price_col: str = 'close',
+    benchmark: bool = True, # Benchmark default True
+    benchmark_col: Optional[str] = None # Benchmark column
 ) -> BacktestResult:
     """
     Functional wrapper for Backtester().backtest method.
@@ -406,6 +454,10 @@ def backtest(
         allow_fractional_positions (bool, optional): Whether to allow fractional shares/units.
             Defaults to True.
         signal_price_col (str, optional): Column for mark-to-market calculations. Defaults to 'close'.
+        benchmark (bool, optional): Whether to compute and include Buy & Hold benchmark results.
+            Defaults to True.
+        benchmark_col (Optional[str], optional): Column to use for Buy & Hold benchmark calculations.
+            If None, defaults to `signal_price_col`. Defaults to None.
 
     Returns:
         BacktestResult: Object containing trades, returns, and other results.
@@ -424,5 +476,7 @@ def backtest(
         fee_curr=fee_curr,
         capital=capital,
         allow_fractional_positions=allow_fractional_positions,
-        signal_price_col=signal_price_col
+        signal_price_col=signal_price_col,
+        benchmark=benchmark,
+        benchmark_col=benchmark_col
     ) 
