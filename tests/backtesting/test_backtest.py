@@ -47,7 +47,7 @@ class TestBacktester:
         entry_price = data['close'].iloc[2]
         exit_price = data['close'].iloc[5]
 
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val=10, capital=10000)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=10, size_unit='quantity', capital=10000)
         
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
@@ -102,7 +102,7 @@ class TestBacktester:
         fee_frac = 0.001 # 0.1%
         qty = 10
 
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val=qty, capital=10000, fee_frac=fee_frac)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=qty, size_unit='quantity', capital=10000, fee_frac=fee_frac)
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
 
@@ -139,7 +139,7 @@ class TestBacktester:
         fee_curr = 0.5 # $0.5 per unit
         qty = 10
 
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val=qty, capital=10000, fee_curr=fee_curr)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=qty, size_unit='quantity', capital=10000, fee_curr=fee_curr)
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
 
@@ -157,7 +157,7 @@ class TestBacktester:
         data = sample_ohlcv_data.copy()
         data.loc[data.index[2], 'entry'] = True
         data.loc[data.index[5], 'exit'] = True
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val=10.7, capital=10000, allow_fractional_positions=False)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=10.7, size_unit='quantity', capital=10000, allow_fractional_positions=False)
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
         assert trade['quantity'] == 10 # Floor of 10.7
@@ -168,7 +168,7 @@ class TestBacktester:
         data.loc[data.index[2], 'entry'] = True
         data.loc[data.index[5], 'exit'] = True
         
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val='trade_size', capital=10000)
+        result = backtest(data, entry_column='entry', exit_column='exit', size='trade_size', size_unit='quantity', capital=10000)
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
         assert trade['quantity'] == 15.0
@@ -180,7 +180,7 @@ class TestBacktester:
         last_price = data['close'].iloc[-1]
         qty = 5
 
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val=qty, capital=10000)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=qty, size_unit='quantity', capital=10000)
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
         assert trade['entry_time'] == data.index[15]
@@ -207,7 +207,7 @@ class TestBacktester:
         exit_price = data['close'].iloc[2] # exit_price_col defaults to 'close'
         qty = 10
 
-        result = backtest(data, entry_column='entry', exit_column='exit', size_col_or_val=qty, capital=10000)
+        result = backtest(data, entry_column='entry', exit_column='exit', size=qty, size_unit='quantity', capital=10000)
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
 
@@ -236,7 +236,7 @@ class TestBacktester:
         result = backtest(data, entry_column='entry', exit_column='exit', 
                           entry_price_col='open', exit_price_col='open', 
                           signal_price_col='custom_mtm', 
-                          size_col_or_val=qty, capital=10000)
+                          size=qty, size_unit='quantity', capital=10000)
         
         assert len(result.trades) == 1
         trade = result.trades.iloc[0]
@@ -253,3 +253,165 @@ class TestBacktester:
         pnl_bar3 = qty * (data['custom_mtm'].iloc[3] - data['custom_mtm'].iloc[2])
         assert result.returns['return_gross_currency'].iloc[3] == pytest.approx(pnl_bar3)
         assert result.returns['equity'].iloc[3] == pytest.approx(10000 + pnl_bar2 + pnl_bar3) 
+
+    def test_size_unit_fraction_default_full_equity(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        entry_price = data['close'].iloc[2]
+        initial_capital = 10000.0
+
+        # size=None, size_unit='fraction' (default) should use 100% equity
+        result = backtest(data, entry_column='entry', exit_column='exit',
+                          capital=initial_capital, entry_price_col='close') 
+        
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity = initial_capital / entry_price
+        assert trade['quantity'] == pytest.approx(expected_quantity)
+        assert trade['entry_price'] == pytest.approx(entry_price)
+
+    def test_size_unit_fraction_specific_half_equity(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        entry_price = data['close'].iloc[2]
+        initial_capital = 10000.0
+
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          size=0.5, size_unit='fraction', capital=initial_capital, entry_price_col='close')
+        
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity = (initial_capital * 0.5) / entry_price
+        assert trade['quantity'] == pytest.approx(expected_quantity)
+
+    def test_size_unit_fraction_column(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data['frac_size'] = 0.25 # Use 25% equity
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        entry_price = data['close'].iloc[2]
+        initial_capital = 10000.0
+
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          size='frac_size', size_unit='fraction', capital=initial_capital, entry_price_col='close')
+        
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity = (initial_capital * 0.25) / entry_price
+        assert trade['quantity'] == pytest.approx(expected_quantity)
+
+    def test_size_unit_quantity_fixed(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        fixed_qty = 7
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          size=fixed_qty, size_unit='quantity', capital=10000)
+        assert len(result.trades) == 1
+        assert result.trades.iloc[0]['quantity'] == fixed_qty
+
+    def test_size_unit_quantity_column(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data['qty_col'] = 8
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          size='qty_col', size_unit='quantity', capital=10000)
+        assert len(result.trades) == 1
+        assert result.trades.iloc[0]['quantity'] == 8
+
+    def test_size_unit_nominal_fixed(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        entry_price = data['close'].iloc[2]
+        nominal_value = 5000.0
+
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          size=nominal_value, size_unit='nominal', capital=10000, entry_price_col='close')
+        
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity = nominal_value / entry_price
+        assert trade['quantity'] == pytest.approx(expected_quantity)
+
+    def test_size_unit_nominal_column(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data['nominal_col'] = 2500.0
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[5], 'exit'] = True
+        entry_price = data['close'].iloc[2]
+
+        result = backtest(data, entry_column='entry', exit_column='exit', 
+                          size='nominal_col', size_unit='nominal', capital=10000, entry_price_col='close')
+        
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity = data['nominal_col'].iloc[2] / entry_price
+        assert trade['quantity'] == pytest.approx(expected_quantity)
+
+    def test_size_unit_fraction_non_fractional_shares(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        entry_price = data['close'].iloc[2] # Approx 100
+        initial_capital = 1050.0 # Should allow ~10.5 shares if fractional
+        
+        # With 100% equity (size=None or 1.0), quantity should be floor(1050/entry_price)
+        result = backtest(data, entry_column='entry', exit_column='exit',
+                          size=1.0, size_unit='fraction', capital=initial_capital, 
+                          allow_fractional_positions=False, entry_price_col='close')
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity_calc = (initial_capital * 1.0) / entry_price
+        assert trade['quantity'] == np.floor(expected_quantity_calc)
+        assert trade['quantity'] < expected_quantity_calc # Ensure flooring happened if not whole number
+
+    def test_size_unit_nominal_non_fractional_shares(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        entry_price = data['close'].iloc[2] # Approx 100
+        nominal_value = 1070.0 # Should allow ~10.7 shares if fractional
+
+        result = backtest(data, entry_column='entry', exit_column='exit',
+                          size=nominal_value, size_unit='nominal', capital=10000, 
+                          allow_fractional_positions=False, entry_price_col='close')
+        assert len(result.trades) == 1
+        trade = result.trades.iloc[0]
+        expected_quantity_calc = nominal_value / entry_price
+        assert trade['quantity'] == np.floor(expected_quantity_calc)
+        assert trade['quantity'] < expected_quantity_calc # Ensure flooring happened
+
+    def test_size_zero_prevents_trade(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        result_qty = backtest(data, entry_column='entry', exit_column='exit', size=0, size_unit='quantity')
+        assert result_qty.trades.empty
+
+        data['zero_size_col'] = 0.0
+        result_frac_col = backtest(data, entry_column='entry', exit_column='exit', size='zero_size_col', size_unit='fraction')
+        assert result_frac_col.trades.empty
+
+        result_nom = backtest(data, entry_column='entry', exit_column='exit', size=0, size_unit='nominal')
+        assert result_nom.trades.empty
+
+    def test_invalid_size_unit(self, sample_ohlcv_data):
+        data = sample_ohlcv_data
+        with pytest.raises(ValueError, match="Invalid size_unit: 'wrong_unit'. Must be 'fraction', 'quantity', or 'nominal'."):
+            backtest(data, entry_column='entry', exit_column='exit', size_unit='wrong_unit')
+
+    def test_entry_price_zero_for_fraction_or_nominal(self, sample_ohlcv_data):
+        data = sample_ohlcv_data.copy()
+        data.loc[data.index[2], 'entry'] = True
+        data.loc[data.index[2], 'close'] = 0.0 # Set entry price to zero
+
+        # Fraction sizing should result in 0 quantity if price is 0
+        result_frac = backtest(data, entry_column='entry', exit_column='exit', 
+                               size=0.5, size_unit='fraction', entry_price_col='close')
+        assert result_frac.trades.empty # No trade should occur
+
+        # Nominal sizing should result in 0 quantity if price is 0
+        result_nom = backtest(data, entry_column='entry', exit_column='exit', 
+                              size=1000, size_unit='nominal', entry_price_col='close')
+        assert result_nom.trades.empty # No trade should occur 

@@ -131,6 +131,41 @@ class BacktestResult:
         return stats_dict, fig 
 
     def __repr__(self):
-        # Keep repr simple, encourage use of .statistics() or .report()
-        return (f"BacktestResult(Initial Capital={self.initial_capital:,.2f}, "
-                f"Final Equity={self.final_equity:,.2f}, Total Trades={len(self.trades)})") 
+        stats = self.statistics()
+        return (
+            f"<BacktestResult: Equity {self.initial_capital:,.2f} -> {self.final_equity:,.2f}, "
+            f"Trades: {len(self.trades)}, "
+            f"CAGR: {stats.get('cagr_pct', 'N/A'):.2f}%, "
+            f"Max DD: {stats.get('max_drawdown_pct', 'N/A'):.2f}%, "
+            f"Sharpe: {stats.get('sharpe_ratio', 'N/A'):.2f}, "
+            f"Time in Pos: {stats.get('pct_time_in_position', 'N/A'):.2f}%>"
+        )
+
+    def _repr_html_(self):
+        stats = self.statistics()
+        # Basic HTML representation, can be enhanced with CSS
+        html = "<h4>BacktestResult</h4>"
+        html += "<table>"
+        html += f"<tr><td>Initial Capital</td><td>{self.initial_capital:,.2f}</td></tr>"
+        html += f"<tr><td>Final Equity</td><td>{self.final_equity:,.2f}</td></tr>"
+        html += f"<tr><td>Total Trades</td><td>{len(self.trades)}</td></tr>"
+        
+        # Safely get stats, format them, and handle potential 'N/A' or missing keys
+        cagr = stats.get('cagr_pct', 'N/A')
+        cagr_str = f"{cagr:.2f}%" if isinstance(cagr, (int, float)) else str(cagr)
+        html += f"<tr><td>CAGR</td><td>{cagr_str}</td></tr>"
+        
+        max_dd = stats.get('max_drawdown_pct', 'N/A')
+        max_dd_str = f"{max_dd:.2f}%" if isinstance(max_dd, (int, float)) else str(max_dd)
+        html += f"<tr><td>Max Drawdown</td><td>{max_dd_str}</td></tr>"
+        
+        sharpe = stats.get('sharpe_ratio', 'N/A')
+        sharpe_str = f"{sharpe:.2f}" if isinstance(sharpe, (int, float)) else str(sharpe)
+        html += f"<tr><td>Sharpe Ratio</td><td>{sharpe_str}</td></tr>"
+
+        time_in_pos = stats.get('pct_time_in_position', 'N/A')
+        time_in_pos_str = f"{time_in_pos:.2f}%" if isinstance(time_in_pos, (int, float)) else str(time_in_pos)
+        html += f"<tr><td>Time in Position</td><td>{time_in_pos_str}</td></tr>"
+        
+        html += "</table>"
+        return html 

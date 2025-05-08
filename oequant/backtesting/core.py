@@ -15,7 +15,8 @@ class Backtester:
         exit_column: str,
         entry_price_col: str = 'close',
         exit_price_col: str = 'close',
-        size_col_or_val: any = 1.0, # float for fixed units, str for column name
+        size: any = None, # Renamed from size_col_or_val, default None to handle 'fraction' 1.0 internally
+        size_unit: str = 'fraction', # 'fraction', 'quantity', 'nominal'
         fee_frac: float = 0.0,
         fee_curr: float = 0.0, # Static currency fee per unit
         capital: float = 100_000.0,
@@ -25,6 +26,35 @@ class Backtester:
         """
         Core backtesting logic.
         Handles column names or pandas expressions for entry/exit signals.
+
+        Args:
+            data (pd.DataFrame): Input OHLCV data with a DatetimeIndex.
+            entry_column (str): Column name or pandas expression for entry signals (boolean).
+            exit_column (str): Column name or pandas expression for exit signals (boolean).
+            entry_price_col (str, optional): Column for actual entry prices. Defaults to 'close'.
+            exit_price_col (str, optional): Column for actual exit prices. Defaults to 'close'.
+            size (any, optional): Size of the position.
+                - If `size_unit` is 'fraction' (default):
+                    - If `None` (default), uses 1.0 (100% of current equity).
+                    - If float, specifies fraction of current equity (e.g., 0.5 for 50%).
+                    - If str (column name), column contains the fraction of equity.
+                - If `size_unit` is 'quantity':
+                    - If float/int, specifies the number of units/shares.
+                    - If str (column name), column contains the number of units/shares.
+                - If `size_unit` is 'nominal':
+                    - If float/int, specifies the nominal monetary value to invest.
+                    - If str (column name), column contains the nominal monetary value.
+            size_unit (str, optional): Unit for `size`. Can be 'fraction', 'quantity', or 'nominal'.
+                Defaults to 'fraction'.
+            fee_frac (float, optional): Fractional fee per trade (e.g., 0.001 for 0.1%). Defaults to 0.0.
+            fee_curr (float, optional): Currency fee per unit traded. Defaults to 0.0.
+            capital (float, optional): Initial capital. Defaults to 100,000.0.
+            allow_fractional_positions (bool, optional): Whether to allow fractional shares/units.
+                Defaults to True.
+            signal_price_col (str, optional): Column for mark-to-market calculations. Defaults to 'close'.
+
+        Returns:
+            BacktestResult: Object containing trades, returns, and other results.
         """
         if not isinstance(data.index, pd.DatetimeIndex):
             raise ValueError("Data index must be a DatetimeIndex.")
@@ -62,15 +92,18 @@ class Backtester:
                 raise ValueError(f"Failed to evaluate exit expression '{exit_column}'. Original error: {e}") from e
         # --- End Expression Evaluation ---
 
-        # Validate required columns (using potentially generated internal names)
+        # Validate required columns
         required_cols = {internal_entry_col, internal_exit_col, entry_price_col, exit_price_col, signal_price_col}
-        if isinstance(size_col_or_val, str):
-            required_cols.add(size_col_or_val)
+        if isinstance(size, str): # Check if size is a column name
+            required_cols.add(size)
         missing_cols = required_cols - set(data_copy.columns)
         if missing_cols:
-             # Clean up temporary columns before raising error
             data_copy.drop(columns=temp_cols_to_drop, inplace=True, errors='ignore')
             raise ValueError(f"Missing required columns in data: {missing_cols}")
+
+        if size_unit not in ['fraction', 'quantity', 'nominal']:
+            data_copy.drop(columns=temp_cols_to_drop, inplace=True, errors='ignore')
+            raise ValueError(f"Invalid size_unit: '{size_unit}'. Must be 'fraction', 'quantity', or 'nominal'.")
 
         # Initialize results storage
         trades_list = []
@@ -94,7 +127,15 @@ class Backtester:
         entry_price_series = data_copy[entry_price_col]
         exit_price_series = data_copy[exit_price_col]
         signal_price_series = data_copy[signal_price_col]
-        size_series = data_copy[size_col_or_val] if isinstance(size_col_or_val, str) else None
+        
+        # Handle size parameter
+        size_is_column = isinstance(size, str)
+        size_series_data = data_copy[size] if size_is_column else None
+        
+        # Effective size for 'fraction' unit if size is None (default)
+        effective_size_val = size
+        if size_unit == 'fraction' and size is None:
+            effective_size_val = 1.0 # Default to 100% equity if size is None for fraction unit
 
         # --- Main Backtest Loop --- 
         # (Using optimized access where possible, e.g. pre-selected series)
@@ -151,10 +192,31 @@ class Backtester:
                 trade_number += 1
                 trade_entry_price_actual = entry_price_series.iloc[i]
                 
-                if size_series is not None:
-                    quantity_requested = size_series.iloc[i]
-                else:
-                    quantity_requested = float(size_col_or_val)
+                # --- Sizing Logic ---
+                current_size_input = 0.0
+                if size_is_column:
+                    current_size_input = size_series_data.iloc[i]
+                elif effective_size_val is not None: # Handles fixed numeric size or default fraction
+                    current_size_input = float(effective_size_val)
+                else: # Should not happen if logic is correct, but as a fallback
+                    data_copy.drop(columns=temp_cols_to_drop, inplace=True, errors='ignore')
+                    raise ValueError("Size parameter is not correctly defined for trade entry.")
+
+                quantity_requested = 0.0
+                if size_unit == 'fraction':
+                    if trade_entry_price_actual <= 0: # Avoid division by zero or investing in valueless asset
+                        quantity_requested = 0.0 
+                    else:
+                        # Use equity_at_bar_start as it reflects capital before this trade's costs
+                        quantity_requested = (current_size_input * equity_at_bar_start) / trade_entry_price_actual
+                elif size_unit == 'quantity':
+                    quantity_requested = current_size_input
+                elif size_unit == 'nominal':
+                    if trade_entry_price_actual <= 0:
+                        quantity_requested = 0.0
+                    else:
+                        quantity_requested = current_size_input / trade_entry_price_actual
+                # --- End Sizing Logic ---
                 
                 if not allow_fractional_positions:
                     quantity = math.floor(quantity_requested)
@@ -308,7 +370,8 @@ def backtest(
     exit_column: str,
     entry_price_col: str = 'close',
     exit_price_col: str = 'close',
-    size_col_or_val: any = 1.0,
+    size: any = None, # Renamed, default None
+    size_unit: str = 'fraction', # 'fraction', 'quantity', 'nominal'
     fee_frac: float = 0.0,
     fee_curr: float = 0.0,
     capital: float = 100_000.0,
@@ -316,17 +379,47 @@ def backtest(
     signal_price_col: str = 'close'
 ) -> BacktestResult:
     """
-    User-friendly functional wrapper for the Backtester class.
-    Can accept column names or pandas expressions for entry/exit signals.
+    Functional wrapper for Backtester().backtest method.
+
+    Args:
+        data (pd.DataFrame): Input OHLCV data with a DatetimeIndex.
+        entry_column (str): Column name or pandas expression for entry signals (boolean).
+        exit_column (str): Column name or pandas expression for exit signals (boolean).
+        entry_price_col (str, optional): Column for actual entry prices. Defaults to 'close'.
+        exit_price_col (str, optional): Column for actual exit prices. Defaults to 'close'.
+        size (any, optional): Size of the position.
+            - If `size_unit` is 'fraction' (default):
+                - If `None` (default), uses 1.0 (100% of current equity).
+                - If float, specifies fraction of current equity (e.g., 0.5 for 50%).
+                - If str (column name), column contains the fraction of equity.
+            - If `size_unit` is 'quantity':
+                - If float/int, specifies the number of units/shares.
+                - If str (column name), column contains the number of units/shares.
+            - If `size_unit` is 'nominal':
+                - If float/int, specifies the nominal monetary value to invest.
+                - If str (column name), column contains the nominal monetary value.
+        size_unit (str, optional): Unit for `size`. Can be 'fraction', 'quantity', or 'nominal'.
+            Defaults to 'fraction'.
+        fee_frac (float, optional): Fractional fee per trade (e.g., 0.001 for 0.1%). Defaults to 0.0.
+        fee_curr (float, optional): Currency fee per unit traded. Defaults to 0.0.
+        capital (float, optional): Initial capital. Defaults to 100,000.0.
+        allow_fractional_positions (bool, optional): Whether to allow fractional shares/units.
+            Defaults to True.
+        signal_price_col (str, optional): Column for mark-to-market calculations. Defaults to 'close'.
+
+    Returns:
+        BacktestResult: Object containing trades, returns, and other results.
     """
-    engine = Backtester()
-    return engine.backtest(
+    # Create an instance of Backtester and call its backtest method
+    instance = Backtester()
+    return instance.backtest(
         data=data,
         entry_column=entry_column,
         exit_column=exit_column,
         entry_price_col=entry_price_col,
         exit_price_col=exit_price_col,
-        size_col_or_val=size_col_or_val,
+        size=size,
+        size_unit=size_unit,
         fee_frac=fee_frac,
         fee_curr=fee_curr,
         capital=capital,

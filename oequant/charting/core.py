@@ -39,8 +39,8 @@ def plot_results(
     indicators_other: list = None,
     show_ohlc: bool = False,
     plot_width: int = 1000,
-    # figsize is less relevant, use plot_width and calculate heights
-    # open_browser: bool = True # Control this from the calling .report() or user context
+    main_price_plot_height: int = 400,       # Height for the main price chart
+    per_indicator_plot_height: int = 80     # Height for each 'other' indicator chart
 ) -> gridplot:
     """
     Plots the backtest results using Bokeh.
@@ -94,14 +94,23 @@ def plot_results(
 
     # Determine number of plots and heights
     num_other_indicators = len(indicators_other)
-    price_height = 400
-    equity_height = 100
-    indicator_height = 80
-    total_height = price_height + equity_height + num_other_indicators * indicator_height
 
+    # main_price_plot_height is for fig_price (from parameter)
+    # per_indicator_plot_height is for each fig_indicator (from parameter)
+
+    # Calculate equity curve height such that it's 1/3 of the sum of:
+    # main_price_plot_height, calculated_equity_height, and (num_other_indicators * per_indicator_plot_height)
+    # Derivation: H_e = (main_price_plot_height + num_other_indicators * per_indicator_plot_height) / 2
+    calculated_equity_height = int(round((main_price_plot_height + num_other_indicators * per_indicator_plot_height) / 2))
+
+    # Ensure a minimum reasonable height for the equity plot
+    min_eq_height = max(50, int(per_indicator_plot_height * 0.75)) # e.g. 75% of an indicator height, or 50px
+    if calculated_equity_height < min_eq_height:
+        calculated_equity_height = min_eq_height
+    
     # ---- Price Plot ----
     fig_price = figure(
-        height=price_height, width=plot_width, tools=tools,
+        height=main_price_plot_height, width=plot_width, tools=tools,
         x_axis_type="datetime", x_axis_location="above",
         title=f"{price_col.capitalize()} with Trades"
     )
@@ -153,7 +162,7 @@ def plot_results(
 
     # ---- Equity Curve Plot ----
     fig_equity = figure(
-        height=equity_height, width=plot_width, tools=tools,
+        height=calculated_equity_height, width=plot_width, tools=tools,
         x_range=fig_price.x_range, # Link x-axes
         x_axis_type="datetime",
         title="Equity Curve"
@@ -177,7 +186,7 @@ def plot_results(
     for indicator_name in indicators_other:
         if indicator_name in ohlcv.columns:
             fig_indicator = figure(
-                height=indicator_height, width=plot_width, tools=tools,
+                height=per_indicator_plot_height, width=plot_width, tools=tools,
                 x_range=fig_price.x_range, # Link x-axes
                 x_axis_type="datetime",
                 title=indicator_name

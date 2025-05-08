@@ -3,6 +3,9 @@
 import oequant as oq
 import pandas as pd
 import pandas_ta as ta
+from bokeh.io import output_notebook
+output_notebook() # this is needed for interactive plots
+
 
 # Load sample data
 ticker = "QQQ"
