@@ -100,13 +100,16 @@ class TestBacktestResultMethods:
                 'indicators_other': None,
                 'show_ohlc': True,
                 'plot_width': 1000,
-                'show_benchmark': False # Check False is passed
+                'show_benchmark': False, # Check False is passed
+                'main_price_plot_height': 400,  # Added default
+                'per_indicator_plot_height': 80,   # Added default
+                'plot_theme': 'dark'  # Added default theme
             }
             mock_plot_no_bench.assert_called_once_with(**expected_call_args_no_bench)
-            assert layout_no_bench is mock_layout
+            assert layout_no_bench == mock_layout
 
         # --- Test case 2: Default show_benchmark=True --- 
-        plot_args_default_bench = {'price_col': 'open'} # Minimal args
+        plot_args_default_bench = {'price_col': 'open', 'plot_theme': 'light'} # Minimal args, but override theme for test
         with patch('oequant.charting.core.plot_results') as mock_plot_default_bench:
             mock_plot_default_bench.return_value = mock_layout
             layout_default_bench = result.plot(**plot_args_default_bench)
@@ -118,7 +121,10 @@ class TestBacktestResultMethods:
                 'indicators_other': None,
                 'show_ohlc': False, # Default from .plot()
                 'plot_width': 1000, # Default from .plot()
-                'show_benchmark': True # Check default is True
+                'show_benchmark': True, # Check default is True
+                'main_price_plot_height': 400,  # Default from BacktestResult.plot
+                'per_indicator_plot_height': 80,   # Default from BacktestResult.plot
+                'plot_theme': 'light' # Overridden for this test case
             }
             mock_plot_default_bench.assert_called_once_with(**expected_call_args_default_bench)
             assert layout_default_bench is mock_layout

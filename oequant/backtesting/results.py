@@ -30,7 +30,8 @@ _PRETTY_STAT_NAMES = {
     'loss_rate_pct': 'Loss Rate (%)',
     'avg_win_trade_pct': 'Avg Win Trade (%)',
     'avg_loss_trade_pct': 'Avg Loss Trade (%)',
-    'profit_factor': 'Profit Factor'
+    'profit_factor': 'Profit Factor',
+    'avg_bars_held': 'Avg Bars Held'
 }
 _PERCENTAGE_KEYS = {k for k, v in _PRETTY_STAT_NAMES.items() if '%' in v}
 
@@ -96,7 +97,10 @@ class BacktestResult:
         indicators_other: list = None,
         show_ohlc: bool = False,
         plot_width: int = 1000,
-        show_benchmark: bool = True
+        show_benchmark: bool = True,
+        main_price_plot_height: int = 400,
+        per_indicator_plot_height: int = 80,
+        plot_theme: str = "dark"
     ) -> LayoutDOM:
         """
         Generates a plot of the backtest results using Bokeh.
@@ -108,6 +112,9 @@ class BacktestResult:
             show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to False.
             plot_width (int, optional): Width of the plot.
             show_benchmark (bool, optional): If True and benchmark available, plot benchmark equity. Defaults to True.
+            main_price_plot_height (int, optional): Height of the main price plot. Defaults to 400.
+            per_indicator_plot_height (int, optional): Height of each secondary indicator plot. Defaults to 80.
+            plot_theme (str, optional): Theme for the plot ("dark" or "light"). Defaults to "dark".
 
         Returns:
             bokeh.layouts.LayoutDOM: The Bokeh layout object.
@@ -122,7 +129,10 @@ class BacktestResult:
             indicators_other=indicators_other,
             show_ohlc=show_ohlc,
             plot_width=plot_width,
-            show_benchmark=show_benchmark
+            show_benchmark=show_benchmark,
+            main_price_plot_height=main_price_plot_height,
+            per_indicator_plot_height=per_indicator_plot_height,
+            plot_theme=plot_theme
         )
         
     def report(self, show_plot=True, stats_args=None, plot_args=None, show_benchmark_in_report: bool = True, table_format: str = 'grid'):
@@ -199,9 +209,9 @@ class BacktestResult:
             f"<BacktestResult: Equity {self.initial_capital:,.2f} -> {self.final_equity:,.2f}, "
             f"Trades: {len(self.trades)}, "
             f"CAGR: {stats.get('cagr_pct', 'N/A') if isinstance(stats.get('cagr_pct'), (int, float)) else 'N/A'}, " # defensive formatting
-            f"Max DD: {stats.get('max_drawdown_pct', 'N/A') if isinstance(stats.get('max_drawdown_pct'), (int, float)) else 'N/A'}, "
+            f"Max DD: {stats.get('max_dd_pct', 'N/A') if isinstance(stats.get('max_dd_pct'), (int, float)) else 'N/A'}, "
             f"Sharpe: {stats.get('sharpe_ratio', 'N/A') if isinstance(stats.get('sharpe_ratio'), (int, float)) else 'N/A'}, "
-            f"Time in Pos: {stats.get('pct_time_in_position', 'N/A') if isinstance(stats.get('pct_time_in_position'), (int, float)) else 'N/A'}%"
+            f"Time in Pos: {stats.get('pct_in_position', 'N/A') if isinstance(stats.get('pct_in_position'), (int, float)) else 'N/A'}%"
         )
         if self.benchmark_res:
             # Ensure benchmark stats are also defensively formatted
@@ -226,9 +236,9 @@ class BacktestResult:
             return str(value)
 
         html += f"<tr><td style='border: 1px solid black; padding: 5px;'>CAGR</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('cagr_pct'), is_pct=True)}</td></tr>"
-        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Max Drawdown</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('max_drawdown_pct'), is_pct=True)}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Max Drawdown</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('max_dd_pct'), is_pct=True)}</td></tr>"
         html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Sharpe Ratio</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('sharpe_ratio'))}</td></tr>"
-        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Time in Position</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('pct_time_in_position'), is_pct=True)}</td></tr>"
+        html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Time in Position</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(stats.get('pct_in_position'), is_pct=True)}</td></tr>"
         
         if self.benchmark_res:
             bench_stats = self.benchmark_res.statistics()
@@ -236,7 +246,7 @@ class BacktestResult:
             html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Initial Capital</td><td style='border: 1px solid black; padding: 5px;'>{self.benchmark_res.initial_capital:,.2f}</td></tr>"
             html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Final Equity</td><td style='border: 1px solid black; padding: 5px;'>{self.benchmark_res.final_equity:,.2f}</td></tr>"
             html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark CAGR</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(bench_stats.get('cagr_pct'), is_pct=True)}</td></tr>"
-            html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Max Drawdown</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(bench_stats.get('max_drawdown_pct'), is_pct=True)}</td></tr>"
+            html += f"<tr><td style='border: 1px solid black; padding: 5px;'>Benchmark Max Drawdown</td><td style='border: 1px solid black; padding: 5px;'>{format_stat(bench_stats.get('max_dd_pct'), is_pct=True)}</td></tr>"
 
         html += "</table>"
         return html 

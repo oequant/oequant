@@ -50,6 +50,7 @@ def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_fre
         stats['avg_win_trade_pct'] = 0.0
         stats['avg_loss_trade_pct'] = 0.0
         stats['profit_factor'] = np.nan
+        stats['avg_bars_held'] = 0.0
         return pd.Series(stats)
 
     # Determine PnL columns to use
@@ -170,6 +171,12 @@ def calculate_statistics(result: BacktestResult, PnL_type: str = 'net', risk_fre
         stats['avg_win_trade_pct'] = 0.0
         stats['avg_loss_trade_pct'] = 0.0
         stats['profit_factor'] = 1.0 # Align with test for no trades
+
+    # Average Bars Held
+    if not trades_df.empty and 'bars_held' in trades_df.columns:
+        stats['avg_bars_held'] = trades_df['bars_held'].mean()
+    else:
+        stats['avg_bars_held'] = 0.0
 
     # Round floats before converting to Series, but keep NaN/inf as is
     for k, v in stats.items():

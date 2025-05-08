@@ -81,7 +81,11 @@ print("Backtest completed.")
 #%%
 # Cell 4: Reporting
 print("\nGenerating report...")
-results.report()
+results.report(show_plot=True, plot_args={
+    'indicators_other': ['rsi_3'],
+    'per_indicator_plot_height': 160
+    # 'plot_theme': 'light' # Uncomment to use light theme
+})
 
 print("\nScript finished.") 
 # %%

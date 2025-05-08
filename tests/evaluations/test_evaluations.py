@@ -85,6 +85,7 @@ class TestEvaluations:
         assert stats['total_trades'] == 0
         assert stats['win_rate_pct'] == 0.0
         assert stats['profit_factor'] == 1.0 # Adjusted expectation for no PnL
+        assert stats['avg_bars_held'] == 0.0 # Added assertion
 
     def test_calculate_statistics_one_trade_net(self, sample_backtest_result_one_trade):
         result = sample_backtest_result_one_trade
@@ -129,6 +130,7 @@ class TestEvaluations:
         # Total net profit = 27.97. Max DD = 0. Should be inf.
         assert np.isinf(stats['serenity_ratio'])
         assert np.isinf(stats['cagr_to_max_dd']) # As max_dd_pct is 0
+        assert stats['avg_bars_held'] == 2.0 # Trade in fixture has bars_held = 2
 
     def test_calculate_statistics_one_trade_gross(self, sample_backtest_result_one_trade):
         result = sample_backtest_result_one_trade
@@ -143,6 +145,7 @@ class TestEvaluations:
         # Sharpe/Sortino should also differ if returns differ
         if not (np.isnan(stats_net['sharpe_ratio']) or np.isnan(stats_gross['sharpe_ratio'])):
              assert stats_gross['sharpe_ratio'] != stats_net['sharpe_ratio']
+        assert stats_gross['avg_bars_held'] == 2.0 # Should be the same as net for this metric
 
     def test_max_drawdown_calculation(self):
         dates = pd.date_range(start='2023-01-01', periods=5, freq='B')
@@ -174,6 +177,12 @@ class TestEvaluations:
         # Serenity: Total Profit = 200. Max Abs DD = 0.02970297 * 10100 = 300
         # Serenity = 200 / 300 = 0.666
         assert stats['serenity_ratio'] == pytest.approx(200 / (0.02970297 * 10100), abs=0.01)
+        # This test uses a dummy trades_df, need to add 'bars_held' for avg_bars_held
+        # For now, if not present, it defaults to 0. Let's assert that, or update fixture later if specific value needed.
+        # The calculate_statistics defaults to 0 if 'bars_held' is not present or trades_df is empty.
+        # The dummy trade_df here is `trades_df = pd.DataFrame([{'pnl_net_currency': 200, 'pnl_net_frac': 0.02}])`
+        # It doesn't have 'bars_held'. So, avg_bars_held should be 0.
+        assert stats['avg_bars_held'] == 0.0
 
     def test_empty_returns_df(self):
         empty_returns = pd.DataFrame(columns=['equity', 'position_unit', 'position_usd', 'return_gross_frac', 'return_net_frac', 'return_gross_currency', 'return_net_currency'])
@@ -187,4 +196,5 @@ class TestEvaluations:
         assert stats['cagr_pct'] == 0.0
         assert np.isnan(stats['sharpe_ratio'])
         assert stats['total_trades'] == 0
+        assert stats['avg_bars_held'] == 0.0 # Added assertion
 
