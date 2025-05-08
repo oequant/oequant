@@ -3,6 +3,9 @@ import numpy as np
 import math
 from .results import BacktestResult
 from typing import Optional # Add Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Backtester:
     def __init__(self):
@@ -82,7 +85,7 @@ class Backtester:
                 internal_entry_col = '__entry_signal__'
                 data_copy[internal_entry_col] = entry_signal
                 temp_cols_to_drop.append(internal_entry_col)
-                print(f"Evaluated entry expression: '{entry_column}' -> {internal_entry_col}")
+                logger.debug(f"Evaluated entry expression: '{entry_column}' -> {internal_entry_col}")
             except Exception as e:
                 raise ValueError(f"Failed to evaluate entry expression '{entry_column}'. Original error: {e}") from e
                 
@@ -94,7 +97,7 @@ class Backtester:
                 internal_exit_col = '__exit_signal__'
                 data_copy[internal_exit_col] = exit_signal
                 temp_cols_to_drop.append(internal_exit_col)
-                print(f"Evaluated exit expression: '{exit_column}' -> {internal_exit_col}")
+                logger.debug(f"Evaluated exit expression: '{exit_column}' -> {internal_exit_col}")
             except Exception as e:
                 raise ValueError(f"Failed to evaluate exit expression '{exit_column}'. Original error: {e}") from e
         # --- End Expression Evaluation ---

@@ -1,5 +1,8 @@
 import pandas as pd
 import yfinance as yf
+import logging
+
+logger = logging.getLogger(__name__)
 
 def get_data(symbols, start=None, end=None, data_source='yf', **kwargs):
     """
@@ -34,12 +37,12 @@ def get_data(symbols, start=None, end=None, data_source='yf', **kwargs):
     data = yf.download(symbols, start=start, end=end, progress=False, **kwargs)
 
     if data.empty:
-        print(f"No data found for {symbols} between {start} and {end}.")
+        logger.warning(f"No data found for {symbols} between {start} and {end}.")
         return pd.DataFrame() # Return an empty DataFrame
 
-    print(f"Initial yfinance columns: {data.columns}") 
-    print(f"Type of yfinance columns: {type(data.columns)}")
-    print(f"Is MultiIndex: {isinstance(data.columns, pd.MultiIndex)}")
+    logger.debug(f"Initial yfinance columns: {data.columns}") 
+    logger.debug(f"Type of yfinance columns: {type(data.columns)}")
+    logger.debug(f"Is MultiIndex: {isinstance(data.columns, pd.MultiIndex)}")
 
     if isinstance(data.columns, pd.MultiIndex):
         # Handles multiple symbols when yfinance default group_by='column' is used,
@@ -128,6 +131,6 @@ def get_data(symbols, start=None, end=None, data_source='yf', **kwargs):
             if 'symbol' in data.columns:
                 del data['symbol']
 
-    print(f"Processed data columns: {data.columns}")
-    print(f"Processed data index: {data.index}")
+    logger.debug(f"Processed data columns: {data.columns}")
+    logger.debug(f"Processed data index: {data.index}")
     return data 
