@@ -2,7 +2,9 @@
 
 A simple quantitative trading backtesting package.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/YOUR_USERNAME/oequant/blob/main/examples/intro.ipynb)
+
+### Try it in Google Colab directly:
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/oequant/oequant/blob/main/examples/intro.ipynb)
 
 ## Features
 
