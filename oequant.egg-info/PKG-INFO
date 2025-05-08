@@ -9,9 +9,11 @@ Project-URL: Repository, https://github.com/yourusername/oequant
 Requires-Python: >=3.8
 License-File: LICENSE
 Requires-Dist: pandas
-Requires-Dist: numpy
+Requires-Dist: numpy<1.24
 Requires-Dist: yfinance
 Requires-Dist: bokeh
+Requires-Dist: pandas-ta
+Requires-Dist: setuptools
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
 Requires-Dist: bokeh; extra == "dev"

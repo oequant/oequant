@@ -158,14 +158,18 @@ def plot_results(
         x_axis_type="datetime",
         title="Equity Curve"
     )
-    equity_source = ColumnDataSource(returns)
-    fig_equity.line('index', 'equity', source=equity_source, color='purple', legend_label="Equity")
+    # Prepare returns data for Bokeh source
+    returns_for_plot = returns.reset_index() # Index (e.g., 'date') becomes a column
+    date_col_name = returns_for_plot.columns[0] # The first column is the former index
+    
+    equity_source = ColumnDataSource(returns_for_plot)
+    fig_equity.line(x=date_col_name, y='equity', source=equity_source, color='purple', legend_label="Equity")
     fig_equity.yaxis.formatter = NumeralTickFormatter(format="$ 0,0")
     fig_equity.xaxis.visible = False
     fig_equity.legend.location = "top_left"
     fig_equity.add_tools(crosshair)
-    fig_equity.add_tools(HoverTool(tooltips=[("Date", "$index{%F}"), ("Equity", "@equity{$0,0}")], 
-                                 formatters={'$index': 'datetime'}, mode='vline'))
+    fig_equity.add_tools(HoverTool(tooltips=[("Date", f"@{date_col_name}{{%F}}"), ("Equity", "@equity{$0,0}")], 
+                                 formatters={f'@{date_col_name}': 'datetime'}, mode='vline'))
 
     # ---- Other Indicator Plots ----
     indicator_figs = []

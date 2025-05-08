@@ -1,7 +1,9 @@
 pandas
-numpy
+numpy<1.24
 yfinance
 bokeh
+pandas-ta
+setuptools
 
 [dev]
 pytest
