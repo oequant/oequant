@@ -1,0 +1,18 @@
+Metadata-Version: 2.4
+Name: oequant
+Version: 0.1.0
+Summary: Quantitative trading backtesting package
+Author-email: Your Name <you@example.com>
+License: MIT
+Project-URL: Homepage, https://github.com/yourusername/oequant
+Project-URL: Repository, https://github.com/yourusername/oequant
+Requires-Python: >=3.8
+License-File: LICENSE
+Requires-Dist: pandas
+Requires-Dist: numpy
+Requires-Dist: yfinance
+Requires-Dist: bokeh
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: bokeh; extra == "dev"
+Dynamic: license-file

@@ -1,0 +1,26 @@
+[project]
+name = "oequant"
+version = "0.1.0"
+description = "Quantitative trading backtesting package"
+authors = [{ name = "Your Name", email = "you@example.com" }] # Please update this
+license = { text = "MIT" }
+requires-python = ">=3.8"
+dependencies = [
+    "pandas",
+    "numpy",
+    "yfinance",
+    "bokeh"
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/oequant" # Please update this
+Repository = "https://github.com/yourusername/oequant" # Please update this
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "bokeh"
+]
+
+[tool.uv]
+# Configuration for uv can be added here if needed 
