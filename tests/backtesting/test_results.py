@@ -85,26 +85,43 @@ class TestBacktestResultMethods:
     def test_plot_method(self, sample_backtest_result_for_methods):
         """Test the .plot() method calls plot_results."""
         result = sample_backtest_result_for_methods
-        # Mock a Bokeh layout object
         mock_layout = MagicMock(spec=LayoutDOM)
-        plot_args = {'price_col': 'close', 'show_ohlc': True}
         
-        # Patch the function in its original module
-        with patch('oequant.charting.core.plot_results') as mock_plot:
-            mock_plot.return_value = mock_layout
-            layout = result.plot(**plot_args)
-            # Check against the full signature including defaults passed by the method
-            expected_call_args = {
+        # --- Test case 1: Explicitly setting show_benchmark=False --- 
+        plot_args_no_bench = {'price_col': 'close', 'show_ohlc': True, 'show_benchmark': False}
+        with patch('oequant.charting.core.plot_results') as mock_plot_no_bench:
+            mock_plot_no_bench.return_value = mock_layout
+            layout_no_bench = result.plot(**plot_args_no_bench)
+            
+            expected_call_args_no_bench = {
                 'result': result,
                 'price_col': 'close',
-                'indicators_price': None, # Default from .plot()
-                'indicators_other': None, # Default from .plot()
-                'show_ohlc': True, # From plot_args
-                # 'figsize': (15, 10)    # Removed figsize
-                'plot_width': 1000 # Default from .plot()
+                'indicators_price': None,
+                'indicators_other': None,
+                'show_ohlc': True,
+                'plot_width': 1000,
+                'show_benchmark': False # Check False is passed
             }
-            mock_plot.assert_called_once_with(**expected_call_args)
-            assert layout is mock_layout
+            mock_plot_no_bench.assert_called_once_with(**expected_call_args_no_bench)
+            assert layout_no_bench is mock_layout
+
+        # --- Test case 2: Default show_benchmark=True --- 
+        plot_args_default_bench = {'price_col': 'open'} # Minimal args
+        with patch('oequant.charting.core.plot_results') as mock_plot_default_bench:
+            mock_plot_default_bench.return_value = mock_layout
+            layout_default_bench = result.plot(**plot_args_default_bench)
+            
+            expected_call_args_default_bench = {
+                'result': result,
+                'price_col': 'open', # From args
+                'indicators_price': None,
+                'indicators_other': None,
+                'show_ohlc': False, # Default from .plot()
+                'plot_width': 1000, # Default from .plot()
+                'show_benchmark': True # Check default is True
+            }
+            mock_plot_default_bench.assert_called_once_with(**expected_call_args_default_bench)
+            assert layout_default_bench is mock_layout
 
     # Mock bokeh.plotting.show and print to test report
     @patch('bokeh.plotting.show') # Correct patch target

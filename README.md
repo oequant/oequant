@@ -1,13 +1,13 @@
 # oequant
 
-A simple quantitative trading backtesting package.
+Straightforward algorithmic trading backtesting package.
 
 
 ### Try it in Google Colab directly:
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/oequant/oequant/blob/main/examples/intro.ipynb)
 
 ## Features
-
+*   Extremely simple to use!
 *   Data fetching (currently `yfinance`)
 *   Vectorized backtesting engine
 *   Performance statistics calculation

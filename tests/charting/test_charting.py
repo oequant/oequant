@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 # import matplotlib.pyplot as plt # No longer needed
 from bokeh.layouts import LayoutDOM # Import Bokeh layout type
+from bokeh.plotting import figure
 
 from oequant.backtesting.results import BacktestResult
 from oequant.charting import plot_results
@@ -44,20 +45,57 @@ def sample_backtest_result_for_plotting():
     trades_df['entry_time'] = pd.to_datetime(trades_df['entry_time'])
     trades_df['exit_time'] = pd.to_datetime(trades_df['exit_time'])
 
+    # Create a mock benchmark result
+    benchmark_returns = pd.DataFrame({'equity': np.linspace(10000, 10200, num_days)}, index=dates)
+    benchmark_trades = pd.DataFrame()
+    benchmark_res = BacktestResult(trades=benchmark_trades, returns=benchmark_returns,
+                                   initial_capital=10000, final_equity=10200, ohlcv_data=ohlc_data.copy())
+
     return BacktestResult(trades=trades_df, returns=returns_df, initial_capital=10000.0, 
-                            final_equity=returns_df['equity'].iloc[-1], ohlcv_data=ohlc_data)
+                            final_equity=returns_df['equity'].iloc[-1], ohlcv_data=ohlc_data,
+                            benchmark_res=benchmark_res) # Add benchmark to fixture
 
 class TestCharting:
     def test_plot_results_runs(self, sample_backtest_result_for_plotting):
-        """Test that plotting runs without errors for basic case."""
+        """Test that plotting runs without errors for basic case (with benchmark)."""
         result = sample_backtest_result_for_plotting
         try:
-            layout = plot_results(result)
+            layout = plot_results(result) # Default show_benchmark=True
             assert isinstance(layout, LayoutDOM)
             # Basic plot has Price + Equity = 2 children in the gridplot
             assert len(layout.children) == 2 
+            # Check if equity plot legend has benchmark
+            equity_plot = layout.children[1][0] # Equity plot is in row 1, col 0
+            assert any('Benchmark Equity' in item.label['value'] for item in equity_plot.legend[0].items)
         except Exception as e:
             pytest.fail(f"plot_results failed with basic input: {e}")
+
+    def test_plot_results_benchmark_hidden(self, sample_backtest_result_for_plotting):
+        """Test plotting runs with benchmark hidden."""
+        result = sample_backtest_result_for_plotting
+        try:
+            layout = plot_results(result, show_benchmark=False)
+            assert isinstance(layout, LayoutDOM)
+            assert len(layout.children) == 2 
+            # Check if equity plot legend does NOT have benchmark
+            equity_plot = layout.children[1][0]
+            assert not any('Benchmark Equity' in item.label['value'] for item in equity_plot.legend[0].items)
+        except Exception as e:
+            pytest.fail(f"plot_results failed with show_benchmark=False: {e}")
+
+    def test_plot_results_no_benchmark_data(self, sample_backtest_result_for_plotting):
+        """Test plotting when result object has no benchmark_res."""
+        result = sample_backtest_result_for_plotting
+        result.benchmark_res = None # Remove benchmark data
+        try:
+            layout = plot_results(result, show_benchmark=True) # Try to show, but no data
+            assert isinstance(layout, LayoutDOM)
+            assert len(layout.children) == 2 
+            # Check if equity plot legend does NOT have benchmark
+            equity_plot = layout.children[1][0]
+            assert not any('Benchmark Equity' in item.label['value'] for item in equity_plot.legend[0].items)
+        except Exception as e:
+            pytest.fail(f"plot_results failed with show_benchmark=True but no benchmark data: {e}")
 
     def test_plot_results_with_indicators(self, sample_backtest_result_for_plotting):
         """Test plotting with price and other indicators."""

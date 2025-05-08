@@ -95,7 +95,8 @@ class BacktestResult:
         indicators_price: list = None, 
         indicators_other: list = None,
         show_ohlc: bool = False,
-        plot_width: int = 1000
+        plot_width: int = 1000,
+        show_benchmark: bool = True
     ) -> LayoutDOM:
         """
         Generates a plot of the backtest results using Bokeh.
@@ -106,6 +107,7 @@ class BacktestResult:
             indicators_other (list, optional): Columns from ohlcv_data for separate subplots.
             show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to False.
             plot_width (int, optional): Width of the plot.
+            show_benchmark (bool, optional): If True and benchmark available, plot benchmark equity. Defaults to True.
 
         Returns:
             bokeh.layouts.LayoutDOM: The Bokeh layout object.
@@ -119,7 +121,8 @@ class BacktestResult:
             indicators_price=indicators_price,
             indicators_other=indicators_other,
             show_ohlc=show_ohlc,
-            plot_width=plot_width
+            plot_width=plot_width,
+            show_benchmark=show_benchmark
         )
         
     def report(self, show_plot=True, stats_args=None, plot_args=None, show_benchmark_in_report: bool = True, table_format: str = 'grid'):

@@ -1,3 +1,5 @@
+#%%
+
 # --- Installation Check --- #
 try:
     import oequant as oq

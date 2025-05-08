@@ -22,6 +22,7 @@ from oequant.backtesting.results import BacktestResult
 
 BULL_COLOR = RGB(0, 255, 0)  # Lime
 BEAR_COLOR = RGB(255, 0, 0) # Red
+BENCH_COLOR = 'gray'        # Color for benchmark line
 
 def _lightness(color, lightness=.94):
     rgb = np.array([color.r, color.g, color.b]) / 255
@@ -40,7 +41,8 @@ def plot_results(
     show_ohlc: bool = False,
     plot_width: int = 1000,
     main_price_plot_height: int = 400,       # Height for the main price chart
-    per_indicator_plot_height: int = 80     # Height for each 'other' indicator chart
+    per_indicator_plot_height: int = 80,     # Height for each 'other' indicator chart
+    show_benchmark: bool = True              # Whether to plot benchmark equity
 ) -> gridplot:
     """
     Plots the backtest results using Bokeh.
@@ -52,6 +54,9 @@ def plot_results(
         indicators_other (list, optional): List of column names from ohlcv_data to plot on separate subplots.
         show_ohlc (bool, optional): If True, attempts to plot OHLC data if available. Defaults to False.
         plot_width (int, optional): Width of the plot. Heights are calculated based on number of subplots.
+        main_price_plot_height (int): Height of the main price plot.
+        per_indicator_plot_height (int): Height of each secondary indicator plot.
+        show_benchmark (bool): If True and benchmark results exist, plot benchmark equity. Defaults to True.
 
     Returns:
         bokeh.layouts.LayoutDOM: The Bokeh gridplot layout object.
@@ -171,13 +176,37 @@ def plot_results(
     returns_for_plot = returns.reset_index() # Index (e.g., 'date') becomes a column
     date_col_name = returns_for_plot.columns[0] # The first column is the former index
     
+    # Add benchmark equity if available and requested
+    if result.benchmark_res and show_benchmark:
+        benchmark_equity = result.benchmark_res.returns['equity']
+        # Align benchmark index with strategy returns index if necessary (though backtest should ensure same index)
+        benchmark_equity = benchmark_equity.reindex(returns.index).reset_index()[equity_curve.name] # get Series
+        returns_for_plot['benchmark_equity'] = benchmark_equity
+        has_benchmark = True
+    else:
+        has_benchmark = False
+        returns_for_plot['benchmark_equity'] = np.nan # Add column even if empty for consistent source
+        
     equity_source = ColumnDataSource(returns_for_plot)
-    fig_equity.line(x=date_col_name, y='equity', source=equity_source, color='purple', legend_label="Equity")
+    
+    # Plot Strategy Equity
+    fig_equity.line(x=date_col_name, y='equity', source=equity_source, color='purple', legend_label="Strategy Equity")
+    
+    # Plot Benchmark Equity (if available)
+    if has_benchmark:
+        fig_equity.line(x=date_col_name, y='benchmark_equity', source=equity_source, color=BENCH_COLOR, line_dash='dashed', legend_label="Benchmark Equity")
+        
     fig_equity.yaxis.formatter = NumeralTickFormatter(format="$ 0,0")
     fig_equity.xaxis.visible = False
     fig_equity.legend.location = "top_left"
     fig_equity.add_tools(crosshair)
-    fig_equity.add_tools(HoverTool(tooltips=[("Date", f"@{date_col_name}{{%F}}"), ("Equity", "@equity{$0,0}")], 
+    
+    # Define tooltips, conditionally add benchmark
+    tooltips_equity = [("Date", f"@{date_col_name}{{%F}}"), ("Strategy Equity", "@equity{$0,0}")]
+    if has_benchmark:
+        tooltips_equity.append(("Benchmark Equity", "@benchmark_equity{$0,0}"))
+        
+    fig_equity.add_tools(HoverTool(tooltips=tooltips_equity, 
                                  formatters={f'@{date_col_name}': 'datetime'}, mode='vline'))
 
     # ---- Other Indicator Plots ----
