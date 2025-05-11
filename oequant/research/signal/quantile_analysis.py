@@ -29,15 +29,22 @@ def _calculate_group_stats(series: pd.Series, ann_factor: int = 252):
     series = series.dropna()
     if len(series) == 0:
         return pd.Series({
-            'Count': 0, 'Total Ret': 0, 'Mean Ret': 0, 'Std Dev': 0,
-            'Sharpe Ratio': 0, 'Win Rate': 0, 'Avg Win': 0, 'Avg Loss': 0,
-            'Profit Factor': np.nan, 'Max Drawdown': 0
+            'CAGR %': 0, 'Return mean %': 0, 'Return std %': 0,
+            'Sharpe Ratio': 0, 'Count': 0, 'Max DD %': 0,
+            'Win Rate': 0, 'Avg Win': 0, 'Avg Loss': 0,
+            'Profit Factor': np.nan
         })
 
     count = len(series)
     total_ret = series.sum()
     mean_ret = series.mean()
     std_dev = series.std()
+    
+    # Calculate CAGR if we have enough data
+    if count > 1:
+        cagr = (1 + total_ret) ** (ann_factor / count) - 1
+    else:
+        cagr = total_ret  # For single data point, just use the return
     
     sharpe_ratio = (mean_ret / std_dev) * np.sqrt(ann_factor) if std_dev != 0 and not np.isnan(std_dev) else 0
     
@@ -59,16 +66,16 @@ def _calculate_group_stats(series: pd.Series, ann_factor: int = 252):
     max_drawdown = drawdown.min() if not drawdown.empty else 0
 
     return pd.Series({
-        'Count': count,
-        'Total Ret': total_ret,
-        'Mean Ret': mean_ret,
-        'Std Dev': std_dev,
+        'CAGR %': cagr * 100,
+        'Return mean %': mean_ret * 100,
+        'Return std %': std_dev * 100,
         'Sharpe Ratio': sharpe_ratio,
+        'Count': count,
+        'Max DD %': max_drawdown * 100,
         'Win Rate': win_rate,
         'Avg Win': avg_win,
         'Avg Loss': avg_loss,
-        'Profit Factor': profit_factor,
-        'Max Drawdown': max_drawdown
+        'Profit Factor': profit_factor
     })
 
 def research_signal_bins(
@@ -81,7 +88,8 @@ def research_signal_bins(
     show_stats: bool = True,
     show_pnl_plot: bool = True,
     pivot_aggfunc: str | list | dict = 'mean',
-    date_col: str | None = None
+    date_col: str | None = None,
+    show_oos_separated: bool = False
 ):
     """
     Researches signals by splitting them into bins (quantiles or custom) and analyzing forward returns.
@@ -101,9 +109,13 @@ def research_signal_bins(
         pivot_aggfunc (str | list | dict, optional): Aggregation function for pivot table. Defaults to 'mean'.
         date_col (str | None, optional): Name of the date column if df doesn't have a DatetimeIndex.
                                         If None, df.index is assumed to be DatetimeIndex.
+        show_oos_separated (bool, optional): Whether to show in-sample and out-of-sample results separately. 
+                                            Only used when oos_from is not None. Defaults to False.
 
     Returns:
         dict: A dictionary containing 'stats_df' (pd.DataFrame) and 'pnl_fig' (plotly.graph_objects.Figure).
+              If show_oos_separated=True and oos_from is provided, returns a dict with 'in_sample' and 'out_sample' keys,
+              each containing its own 'stats_df' and 'pnl_fig'.
     """
     if not isinstance(signal_cols, list):
         signal_cols = [signal_cols]
@@ -156,12 +168,38 @@ def research_signal_bins(
         print("No signal columns were successfully binned and usable. Exiting.")
         return {"stats_df": pd.DataFrame(), "pnl_fig": None}
 
+    # If show_oos_separated is True and oos_from is specified, we'll process in-sample and out-of-sample separately
+    if show_oos_separated and oos_from:
+        oos_timestamp = pd.to_datetime(oos_from)
+        # Split data into in-sample and out-of-sample
+        df_in_sample = df_analysis[df_analysis.index < oos_timestamp]
+        df_out_sample = df_analysis[df_analysis.index >= oos_timestamp]
+        
+        if df_in_sample.empty or df_out_sample.empty:
+            print("Warning: Either in-sample or out-of-sample dataset is empty. Continuing with combined analysis.")
+            show_oos_separated = False
+        else:
+            results = {
+                'in_sample': _process_bins_data(df_in_sample, active_binned_signal_cols, forward_ret_col, pivot_aggfunc, 
+                                              "In-Sample", show_stats, show_pnl_plot),
+                'out_sample': _process_bins_data(df_out_sample, active_binned_signal_cols, forward_ret_col, pivot_aggfunc, 
+                                               "Out-of-Sample", show_stats, show_pnl_plot)
+            }
+            return results
+    
+    # Standard processing (either show_oos_separated=False or oos_from is None)
     pivot_group_cols = active_binned_signal_cols
-    if oos_from:
+    if oos_from and not show_oos_separated:
         oos_timestamp = pd.to_datetime(oos_from)
         df_analysis['is_oos'] = df_analysis.index >= oos_timestamp
         pivot_group_cols = ['is_oos'] + active_binned_signal_cols
     
+    return _process_bins_data(df_analysis, pivot_group_cols, forward_ret_col, pivot_aggfunc, 
+                             None, show_stats, show_pnl_plot)
+
+def _process_bins_data(df_analysis, pivot_group_cols, forward_ret_col, pivot_aggfunc, 
+                      title_prefix=None, show_stats=True, show_pnl_plot=True):
+    """Helper function to process binned data and generate stats and plots."""
     # Ensure forward_ret_col exists
     if forward_ret_col not in df_analysis.columns:
         raise ValueError(f"Forward return column '{forward_ret_col}' not found in DataFrame.")
@@ -193,7 +231,6 @@ def research_signal_bins(
         print(df_pivot_ready[cols_for_pivot_check + ([df_pivot_ready.index.name] if df_pivot_ready.index.name else [])].head())
         return {"stats_df": pd.DataFrame(), "pnl_fig": None}
 
-
     stats_df = returns_by_bin.apply(_calculate_group_stats).T # Transpose for stats per bin
 
     pnl_fig = None
@@ -212,25 +249,34 @@ def research_signal_bins(
                     for col_tuple in cumulative_pnl_for_plot.columns.values
                 ]
 
-            pnl_fig = px.line(cumulative_pnl_for_plot, title=f"Cumulative P&L by Bins of {', '.join(signal_cols)}")
+            title = f"Cumulative P&L by Bins of {', '.join([col[:-4] for col in pivot_group_cols if col.endswith('_bin')])}"
+            if title_prefix:
+                title = f"{title_prefix} {title}"
+                
+            pnl_fig = px.line(cumulative_pnl_for_plot, title=title)
             if _is_notebook():
                 pnl_fig.show()
             else:
-                print("\nCumulative P&L Plot (not displayed in non-notebook environment):")
+                print(f"\nCumulative P&L Plot ({title_prefix or 'combined'} data not displayed in non-notebook environment):")
                 print("Figure object returned in results['pnl_fig']")
 
         else:
             print("Cannot generate P&L plot: Pivoted returns are empty.")
 
-
     if show_stats:
         if not stats_df.empty:
+            title = f"Statistics for {forward_ret_col} by Bins of {', '.join([col[:-4] for col in pivot_group_cols if col.endswith('_bin')])}"
+            if title_prefix:
+                title = f"{title_prefix} {title}"
+                
             if _is_notebook():
-                display(HTML(f"<h3>Statistics for {forward_ret_col} by Bins of {', '.join(signal_cols)}</h3>"))
-                display(stats_df.style.background_gradient(cmap='viridis'))
+                display(HTML(f"<h3>{title}</h3>"))
+                display(stats_df.style.format("{:.3f}").background_gradient(
+                #cmap='viridis'
+                ))
             else:
-                print(f"\nStatistics for {forward_ret_col} by Bins of {', '.join(signal_cols)}:")
-                print(tabulate(stats_df, headers='keys', tablefmt='psql'))
+                print(f"\n{title}:")
+                print(tabulate(stats_df.round(3), headers='keys', tablefmt='psql'))
         else:
             print("Cannot display stats: Statistics DataFrame is empty.")
             

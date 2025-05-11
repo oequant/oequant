@@ -31,10 +31,9 @@ def test_calculate_group_stats_basic():
     s = pd.Series([0.01, 0.02, -0.01, 0.005, 0.015])
     stats = _calculate_group_stats(s)
     assert stats['Count'] == 5
-    assert np.isclose(stats['Mean Ret'], s.mean())
-    assert np.isclose(stats['Total Ret'], s.sum())
+    assert np.isclose(stats['Return mean %'], s.mean() * 100)
     assert stats['Win Rate'] == 0.8
-    assert stats['Max Drawdown'] < 0 # Should be negative
+    assert stats['Max DD %'] < 0 # Should be negative
 
 @patch('oequant.research.signal.quantile_analysis._is_notebook', return_value=False) # Assume not in notebook for tests
 @patch('oequant.research.signal.quantile_analysis.display') # Mock display
@@ -84,6 +83,54 @@ def test_research_signal_bins_cut_custom_bins(mock_px_line, mock_display, mock_i
     assert not results['stats_df'].empty
     assert results['stats_df'].shape[0] <= len(custom_bins) -1 # Number of bins
     mock_px_line.assert_called_once()
+
+@patch('oequant.research.signal.quantile_analysis._is_notebook', return_value=False)
+@patch('oequant.research.signal.quantile_analysis.display')
+@patch('plotly.express.line')
+def test_research_signal_bins_oos_separated(mock_px_line, mock_display, mock_is_notebook, sample_df_for_quantile_analysis):
+    df = sample_df_for_quantile_analysis.copy()
+    # Ensure we have enough non-NaN data
+    df = df.fillna(method='ffill').fillna(method='bfill')
+    
+    mock_fig = MagicMock(spec=go.Figure)
+    mock_px_line.return_value = mock_fig
+    
+    oos_date = df.index[50]  # Split at the middle of the dataset
+    
+    # Call function with show_oos_separated=True
+    results = research_signal_bins(
+        df, 
+        signal_cols='signal1',
+        forward_ret_col='forward_return_01',
+        split_params=3,
+        oos_from=oos_date,
+        show_oos_separated=True
+    )
+    
+    # Verify structure of results
+    assert 'in_sample' in results
+    assert 'out_sample' in results
+    assert 'stats_df' in results['in_sample']
+    assert 'stats_df' in results['out_sample']
+    assert 'pnl_fig' in results['in_sample']
+    assert 'pnl_fig' in results['out_sample']
+    
+    # Verify in-sample data is before oos_date and out-sample is after
+    assert not results['in_sample']['stats_df'].empty
+    assert not results['out_sample']['stats_df'].empty
+    
+    # Check that 'is_oos' is not in the index levels
+    assert 'is_oos' not in results['in_sample']['stats_df'].index.names
+    assert 'is_oos' not in results['out_sample']['stats_df'].index.names
+    
+    # Both should have signal1_bin
+    assert 'signal1_bin' in results['in_sample']['stats_df'].index.names
+    assert 'signal1_bin' in results['out_sample']['stats_df'].index.names
+    
+    # Verify plots were created
+    assert mock_px_line.call_count == 2
+    assert results['in_sample']['pnl_fig'] == mock_fig
+    assert results['out_sample']['pnl_fig'] == mock_fig
 
 @patch('oequant.research.signal.quantile_analysis._is_notebook', return_value=False)
 @patch('oequant.research.signal.quantile_analysis.display')
