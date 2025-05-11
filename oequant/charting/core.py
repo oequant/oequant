@@ -335,7 +335,7 @@ def plot_results_2(
     price_col: str = 'close',
     indicators_price: list = None,
     indicators_other: list = None,
-    show_ohlc: bool = False,
+    show_ohlc: bool = True,
     plot_width: int = 1000,
     main_price_plot_height: int = 300,       # Adjusted default height
     equity_plot_height: int = 150,           # Height for equity
@@ -354,7 +354,7 @@ def plot_results_2(
         price_col (str): Column in ohlcv_data for main price plot (default 'close').
         indicators_price (list, optional): List of column names from ohlcv_data to plot on the main price chart.
         indicators_other (list, optional): List of column names from ohlcv_data to plot on separate subplots.
-        show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to False.
+        show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to True.
         plot_width (int, optional): Width of the plot.
         main_price_plot_height (int): Height of the main price plot.
         equity_plot_height (int): Height of the equity curve plot.
@@ -437,7 +437,7 @@ def plot_results_2(
         fig_equity = figure(
             height=equity_plot_height, width=plot_width, tools=tools,
             x_axis_type="datetime", # title="Equity Curve", Removed title
-            y_range=DataRange1d(only_visible=True),
+            y_range=DataRange1d(only_visible=True, range_padding=0.01),
             background_fill_color=bg_color, border_fill_color=border_color
         )
         fig_equity.min_border_left = left_border_padding
@@ -513,7 +513,7 @@ def plot_results_2(
             height=pnl_plot_height, width=plot_width, tools=tools,
             x_range=fig_equity.x_range, x_axis_type="datetime",
             # title="Profit / Loss per Trade (%)", Removed title
-            y_range=DataRange1d(only_visible=True),
+            y_range=DataRange1d(only_visible=True, range_padding=0.01),
             background_fill_color=bg_color, border_fill_color=border_color
         )
         fig_pnl.min_border_left = left_border_padding
@@ -556,7 +556,7 @@ def plot_results_2(
             height=main_price_plot_height, width=plot_width, tools=tools,
             x_range=fig_equity.x_range, x_axis_type="datetime", # x_axis_location="above", Removed this
             # title=f"{price_col.capitalize()} Chart with Trades", Removed title
-            y_range=DataRange1d(only_visible=True),
+            y_range=DataRange1d(only_visible=True, range_padding=0.01),
             background_fill_color=bg_color, border_fill_color=border_color
         )
         fig_price.min_border_left = left_border_padding
@@ -629,7 +629,7 @@ def plot_results_2(
                 height=volume_plot_height, width=plot_width, tools=tools,
                 x_range=fig_equity.x_range, x_axis_type="datetime",
                 # title="Volume", Removed title
-                y_range=DataRange1d(only_visible=True),
+                y_range=DataRange1d(only_visible=True, range_padding=0.01),
                 background_fill_color=bg_color, border_fill_color=border_color
             )
             fig_volume.min_border_left = left_border_padding
@@ -659,7 +659,7 @@ def plot_results_2(
                     height=per_indicator_plot_height, width=plot_width, tools=tools,
                     x_range=fig_equity.x_range, x_axis_type="datetime",
                     # title=indicator_name, Removed title
-                    y_range=DataRange1d(only_visible=True),
+                    y_range=DataRange1d(only_visible=True, range_padding=0.01),
                     background_fill_color=bg_color, border_fill_color=border_color
                 )
                 fig_indicator.min_border_left = left_border_padding

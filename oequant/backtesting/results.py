@@ -140,7 +140,7 @@ class BacktestResult:
         price_col: str = 'close', 
         indicators_price: list = None, 
         indicators_other: list = None,
-        show_ohlc: bool = False,
+        show_ohlc: bool = True,
         plot_width: int = 1000,
         main_price_plot_height: int = 300,
         equity_plot_height: int = 150,
@@ -157,7 +157,7 @@ class BacktestResult:
             price_col (str): Column in ohlcv_data for main price plot (default 'close').
             indicators_price (list, optional): Columns from ohlcv_data for price chart overlay.
             indicators_other (list, optional): Columns from ohlcv_data for separate subplots.
-            show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to False.
+            show_ohlc (bool, optional): If True, attempts to plot OHLC data. Defaults to True.
             plot_width (int, optional): Width of the plot.
             main_price_plot_height (int): Height of the main price plot.
             equity_plot_height (int): Height of the equity curve plot.
