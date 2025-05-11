@@ -1,9 +1,13 @@
-pandas
-numpy<1.24
-yfinance
-bokeh
-pandas-ta
+pandas<3.0,>=1.5
+numpy<1.24,>=1.20
+yfinance<0.3,>=0.2
+matplotlib<4.0,>=3.0
+bokeh<4.0,>=2.4
+pandas-ta>=0.3.14b
+tabulate<0.10,>=0.9
 setuptools
+plotly>=6.0.1
+seaborn>=0.13.2
 
 [dev]
 pytest

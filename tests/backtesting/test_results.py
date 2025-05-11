@@ -6,6 +6,7 @@ from bokeh.layouts import LayoutDOM, column # Import Bokeh layout type and a sim
 from bokeh.plotting import figure # Import figure to create a simple layout
 from unittest.mock import patch, MagicMock
 from tabulate import tabulate # Import tabulate for mocking if needed
+import unittest
 
 from oequant.backtesting.results import BacktestResult, _prettify_stat_name
 # Need data creation helpers or fixtures
@@ -140,12 +141,14 @@ class TestBacktestResultMethods:
         mock_layout = column() 
         
         with patch.object(result, 'statistics', return_value=mock_stats_series) as mock_stats_method, \
-             patch.object(result, 'plot', return_value=mock_layout) as mock_plot_method:
+             patch.object(result, 'plot2', return_value=mock_layout) as mock_plot2_method:
             
-            result.report(show_plot=True, stats_args={'PnL_type': 'gross'}, plot_args={'show_ohlc': True}, table_format='plain') # Use plain for simpler assertion
+            result.report(show_plot=True, stats_args={'PnL_type': 'gross'}, plot_args={'show_ohlc': True}, table_format='plain')
             
+            # Revert to original assertion as only one call is now expected and observed
             mock_stats_method.assert_called_once_with(PnL_type='gross')
-            mock_plot_method.assert_called_once_with(show_ohlc=True)
+            
+            mock_plot2_method.assert_called_once_with(show_ohlc=True)
             mock_bokeh_show.assert_called_once_with(mock_layout)
             
             # Check print output for key elements of the tabulate table

@@ -16,4 +16,11 @@ oequant/data/__init__.py
 oequant/data/core.py
 oequant/evaluations/__init__.py
 oequant/evaluations/core.py
+oequant/research/__init__.py
+oequant/research/returns.py
+oequant/research/signal/__init__.py
+oequant/research/signal/quantile_analysis.py
+oequant/tests/utils/__init__.py
+oequant/tests/utils/test_pandas_extensions.py
 oequant/utils/__init__.py
+oequant/utils/pandas_extensions.py
