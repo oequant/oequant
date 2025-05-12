@@ -1,8 +1,8 @@
 [project]
 name = "oequant"
 version = "0.1.0"
-description = "Quantitative trading backtesting package"
-authors = [{ name = "Your Name", email = "you@example.com" }] # Please update this
+description = "Quantitative trading research and backtesting package"
+authors = [{ name = "OEquant", email = "oequant@gmail.com" }]
 license = { text = "MIT" }
 requires-python = ">=3.8"
 dependencies = [
@@ -16,16 +16,16 @@ dependencies = [
     "setuptools",
     "plotly>=6.0.1",
     "seaborn>=0.13.2",
+    "bokeh"
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/oequant" # Please update this
-Repository = "https://github.com/yourusername/oequant" # Please update this
+Homepage = "https://github.com/oequant/oequant" 
+Repository = "https://github.com/oequant/oequant"
 
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "bokeh"
 ]
 
 [tool.uv]
