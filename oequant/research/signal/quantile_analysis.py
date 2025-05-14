@@ -96,8 +96,8 @@ def research_signal_bins(
     split_kind: str = 'qcut',
     split_params: int | list = 10,
     oos_from: str | pd.Timestamp | None = None,
-    show_stats: bool = True,
-    show_pnl_plot: bool = True,
+    show_stats: bool = False,
+    show_pnl_plot: bool = False,
     pivot_aggfunc: str | list | dict = 'mean',
     date_col: str | None = None,
     show_oos_separated: bool = False,
@@ -125,9 +125,8 @@ def research_signal_bins(
                                             Only used when oos_from is not None. Defaults to False.
 
     Returns:
-        dict: A dictionary containing 'stats_df' (pd.DataFrame) and 'pnl_fig' (plotly.graph_objects.Figure).
-              If show_oos_separated=True and oos_from is provided, returns a dict with 'in_sample' and 'out_sample' keys,
-              each containing its own 'stats_df' and 'pnl_fig'.
+        stats_df: pd.DataFrame
+        returns_by_bin: pd.DataFrame
     """
     if not isinstance(signal_cols, list):
         signal_cols = [signal_cols]
@@ -178,7 +177,7 @@ def research_signal_bins(
 
     if not active_binned_signal_cols:
         print("No signal columns were successfully binned and usable. Exiting.")
-        return {"stats_df": pd.DataFrame(), "pnl_fig": None}
+        return pd.DataFrame(), pd.DataFrame()
 
     # If show_oos_separated is True and oos_from is specified, we'll process in-sample and out-of-sample separately
     if show_oos_separated and oos_from:
@@ -223,7 +222,7 @@ def _process_bins_data(df_analysis, pivot_group_cols, forward_ret_col, pivot_agg
 
     if df_pivot_ready.empty:
         print(f"DataFrame is empty after dropping NaNs in {cols_for_pivot_check}. Cannot create pivot table.")
-        return {"stats_df": pd.DataFrame(), "pnl_fig": None}
+        return pd.DataFrame(), pd.DataFrame()
 
     try:
         # The pivot table will group by date (index) and then unstack the signal bins
@@ -241,7 +240,7 @@ def _process_bins_data(df_analysis, pivot_group_cols, forward_ret_col, pivot_agg
         print(f"Pivot settings: index='{df_pivot_ready.index.name or 'index'}', columns={pivot_group_cols}, values='{forward_ret_col}', aggfunc='{pivot_aggfunc}'")
         print("Sample of df_pivot_ready.head():")
         print(df_pivot_ready[cols_for_pivot_check + ([df_pivot_ready.index.name] if df_pivot_ready.index.name else [])].head())
-        return {"stats_df": pd.DataFrame(), "pnl_fig": None}
+        return pd.DataFrame(), pd.DataFrame()
 
     stats_df = returns_by_bin.apply(_calculate_group_stats).T # Transpose for stats per bin
 
@@ -292,7 +291,7 @@ def _process_bins_data(df_analysis, pivot_group_cols, forward_ret_col, pivot_agg
         else:
             print("Cannot display stats: Statistics DataFrame is empty.")
             
-    return {"stats_df": stats_df, "pnl_fig": pnl_fig}
+    return stats_df, returns_by_bin
 
 # Example of how to make it available in oequant.research.signal
 # from .quantile_analysis import research_signal_bins
