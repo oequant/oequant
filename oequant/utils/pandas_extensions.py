@@ -118,7 +118,7 @@ def _style_bokeh_axes(p, x_is_datetime=False):
     p.background_fill_color = "#1a1a1a"
     p.border_fill_color = "#1a1a1a"
 
-def _iplot(self, backend='plotly', kind='line', use_webgl=False, **kwargs):
+def _iplot(self, backend='bokeh', kind='line', use_webgl=False, **kwargs):
     # df = self.copy() # Original line
     # Handle Series input by converting to DataFrame
     if isinstance(self, pd.Series):
@@ -192,8 +192,8 @@ def _iplot(self, backend='plotly', kind='line', use_webgl=False, **kwargs):
         df_plot = self.replace([np.inf, -np.inf], np.nan) # Bokeh doesn't handle inf well for auto-ranging
         # For fillna(0), it might be better to let user decide or handle it per plot type
 
-        width = kwargs.get('width', 900)
-        height = kwargs.get('height', 450)
+        width = kwargs.get('width', 1200)
+        height = kwargs.get('height', 600)
         plot_width = width
         if legend_position == 'external':
             plot_width = int(width * 0.8)
