@@ -1,4 +1,8 @@
 import logging
+import numpy as np
+np.NaN = np.nan
+
+import pandas_ta as ta
 
 # Configure basic logging for the package
 # Users can override this by configuring logging themselves before importing oequant
@@ -40,5 +44,6 @@ __all__ = [
     "calculate_statistics",
     "plot_results",
     "plot_results_2",
-    "__version__"
+    "__version__",
+    "ta"
 ] 
