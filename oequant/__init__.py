@@ -33,6 +33,7 @@ from .data.core import get_data
 from .backtesting.core import backtest
 from .backtesting.results import BacktestResult
 from .evaluations.core import calculate_statistics
+from .research.signal.quantile_analysis import research_signal_bins
 from .charting.core import plot_results, plot_results_2
 
 __version__ = "0.1.0" # Example version
@@ -45,5 +46,6 @@ __all__ = [
     "plot_results",
     "plot_results_2",
     "__version__",
-    "ta"
+    "ta",
+    "research_signal_bins"
 ] 
