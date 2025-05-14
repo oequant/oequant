@@ -58,7 +58,7 @@ def get_data(symbols, start=None, end=None, data_source='yf', **kwargs):
                 price_type = 'close'
             new_cols.append((symbol_level, price_type)) # Swap order for desired stacking
 
-        data.columns = pd.MultiIndex.from_tuples(new_cols, names=['symbol', 'feature'])
+        data.columns = pd.MultiIndex.from_tuples(new_cols, names=['symbol', ''])
         
         # If only one symbol was requested but returned MultiIndex, level 0 might be the symbol.
         # If multiple symbols, level 0 is symbol.

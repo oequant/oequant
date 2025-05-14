@@ -1,6 +1,6 @@
 # Makes 'utils' a Python package
 from . import pandas_extensions 
-from .pandas_extensions import init_pandas_extensions, _iplot, append, dataframe_display, ggplot_df, _calculate_group_stats
+from .pandas_extensions import init_pandas_extensions, _iplot, append, dataframe_display, ggplot_df
 from .package_utils import ensure_oequant_installed
 
 __all__ = [
@@ -9,6 +9,5 @@ __all__ = [
     'append', 
     'dataframe_display', 
     'ggplot_df',
-    '_calculate_group_stats',
     'ensure_oequant_installed'
 ] 

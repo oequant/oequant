@@ -26,7 +26,9 @@ except ImportError:
 
 def _calculate_group_stats(series: pd.Series, ann_factor: int = 252):
     """Calculates performance statistics for a series of returns."""
-    series = series.dropna()
+    series_with_nan = series.copy()
+    series_with_zeros = series_with_nan.fillna(0)
+    series = series_with_nan.dropna()
     if len(series) == 0:
         return pd.Series({
             'CAGR %': 0, 'Return mean %': 0, 'Return std %': 0,
@@ -45,8 +47,15 @@ def _calculate_group_stats(series: pd.Series, ann_factor: int = 252):
         cagr = (1 + total_ret) ** (ann_factor / count) - 1
     else:
         cagr = total_ret  # For single data point, just use the return
+
+    count_with_zeros = len(series_with_zeros)
+    cagr_with_zeros = (1 + total_ret) ** (ann_factor / count_with_zeros) - 1
     
     sharpe_ratio = (mean_ret / std_dev) * np.sqrt(ann_factor) if std_dev != 0 and not np.isnan(std_dev) else 0
+
+    mean_ret_with_zeros = series_with_zeros.mean()
+    std_dev_with_zeros = series_with_zeros.std()
+    sharpe_ratio_real = (mean_ret_with_zeros / std_dev_with_zeros) * np.sqrt(ann_factor) if std_dev_with_zeros != 0 and not np.isnan(std_dev_with_zeros) else 0
     
     positive_rets = series[series > 0]
     negative_rets = series[series < 0]
@@ -66,10 +75,12 @@ def _calculate_group_stats(series: pd.Series, ann_factor: int = 252):
     max_drawdown = drawdown.min() if not drawdown.empty else 0
 
     return pd.Series({
-        'CAGR %': cagr * 100,
-        'Return mean %': mean_ret * 100,
-        'Return std %': std_dev * 100,
-        'Sharpe Ratio': sharpe_ratio,
+        'CAGR % (traded days)': cagr * 100,
+        'CAGR % (all days)': cagr_with_zeros * 100,
+        'Return mean BPS': mean_ret * 10000,
+        'Return std BPS': std_dev * 10000,
+        'Sharpe (traded days)': sharpe_ratio,
+        'Sharpe (all days)': sharpe_ratio_real,
         'Count': count,
         'Max DD %': max_drawdown * 100,
         'Win Rate': win_rate,
@@ -89,7 +100,8 @@ def research_signal_bins(
     show_pnl_plot: bool = True,
     pivot_aggfunc: str | list | dict = 'mean',
     date_col: str | None = None,
-    show_oos_separated: bool = False
+    show_oos_separated: bool = False,
+    labels = None
 ):
     """
     Researches signals by splitting them into bins (quantiles or custom) and analyzing forward returns.
@@ -141,9 +153,9 @@ def research_signal_bins(
         try:
             binned_series = None
             if split_kind == 'qcut':
-                binned_series = pd.qcut(df_analysis[col], q=split_params, labels=False, duplicates='drop')
+                binned_series = pd.qcut(df_analysis[col], q=split_params, labels=labels, duplicates='drop')
             elif split_kind == 'cut':
-                binned_series = pd.cut(df_analysis[col], bins=split_params, labels=False, duplicates='drop', include_lowest=True)
+                binned_series = pd.cut(df_analysis[col], bins=split_params, labels=labels, duplicates='drop', include_lowest=True)
             # No else needed as split_kind is validated by now or earlier checks should exist
             
             if binned_series is None: # Should not happen if split_kind is valid
